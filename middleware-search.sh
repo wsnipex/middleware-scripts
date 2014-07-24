@@ -29,8 +29,6 @@ function check_return_code {
   local ret=$2
   if [ $ret -ne 0 ]; then
     echo -n "ERROR executing $command "
-  else
-    echo -n "OK "
   fi
 }
 
@@ -42,7 +40,8 @@ function check_versions {
   echo -n "${process}: "
   case $process in
     httpd)
-      [ -x $command ] && output=$($command -v 2>&1)
+      local ap_ld_path=$(dirname $command)/../lib
+      [ -x $command ] && output=$(LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH $command -v 2>&1 | cut -d " " -f 3)
       check_return_code $command $?
       echo $output
       ;;
@@ -60,7 +59,9 @@ function check_versions {
       [ $(echo $command | grep -q run ; echo $?) -eq 0 ] && output=$($command -V 2>&1) || echo "run.sh not found, process is $command"
       check_return_code $command $?
       ;;
-    *) ;;
+    *)
+      echo "NA"
+      ;;
   esac
 }
 
@@ -100,7 +101,7 @@ function search_packages {
   local pkg
   
   echo '#---- checking packages ---------------#'
-  if [ -z $pkgmanager ]; then
+  if [ -z "$pkgmanager" ]; then
    echo "ERROR: unknown package manager, skipping package checks"
    return
   fi
