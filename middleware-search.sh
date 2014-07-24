@@ -1,17 +1,21 @@
-#--- CONFIG ---#
 searchprocs="apache httpd java tomcat jboss"
 searchpkgs="apache apache2 java tomcat jboss"
 searchdirs="/opt /etc /export"
 fskeywords="[aA]pache java [tT]omcat [jJ][bB]oss"
+
+PS=${PS:-"ps"}
+GREP=${GREP:-"grep"}
 #--------------#
 
-function get_os {
+function get_env {
   local os=$(uname)
   HOST="$(host $(hostname))"
   case $os in 
     SunOS)
       OS="solaris"
       pkgmanager="pkginfo"
+      [ $(command_exists /usr/bin/ps) -eq 0 ] && PS=/usr/bin/ps
+      [ $(command_exists /usr/xpg4/bin/grep) -eq 0 ] && GREP=/usr/xpg4/bin/grep
       ;;
     Linux)
       OS="linux"
@@ -22,6 +26,11 @@ function get_os {
       OS="unknown"
       ;;
   esac   
+}
+
+function command_exists {
+  command -v $1 >/dev/null 2>&1
+  echo $?
 }
 
 function check_return_code {
@@ -46,17 +55,17 @@ function check_versions {
       echo $output
       ;;
     tomcat)
-      [ $(echo $command | grep -q catalina ; echo $?) -eq 0 ] && output=$($command version 2>&1)
+      [ $(echo $command | $GREP -q catalina ; echo $?) -eq 0 ] && output=$($command version 2>&1)
       check_return_code $command $?
       echo $output
       ;;
     java)
-      [ -x $r ] && output=$($command -version 2>&1 | head -1 | cut -d " " -f 3-)
+      [ -x $command ] && output=$($command -version 2>&1 | head -1 | cut -d " " -f 3-)
       check_return_code $command $?
       echo $output
       ;;
     jboss)
-      [ $(echo $command | grep -q run ; echo $?) -eq 0 ] && output=$($command -V 2>&1) || echo "run.sh not found, process is $command"
+      [ $(echo $command | $GREP -q run ; echo $?) -eq 0 ] && output=$($command -V 2>&1) || echo "run.sh not found, process is $command"
       check_return_code $command $?
       ;;
     *)
@@ -69,7 +78,7 @@ function search_processes {
   echo '#---- checking running processes ----#'
   for p in $searchprocs ; do
     echo -n "${p}: "
-    t=$(ps -ax | grep $p | grep -v grep | awk '{print $5}' | sort -u)
+    t=$($PS -e -o comm | $GREP $p | $GREP -v grep | sort -u)
     echo $t
     declare result_$p="$t"
   done
@@ -81,7 +90,7 @@ function search_processes {
     v=result_$p
     res=${!v}
     if [ ${#res} -gt 0 ]; then
-      if [ $(echo $res | grep -qE " "; echo $?) -eq 0 ]; then
+      if [ $(echo $res | $GREP -qE " "; echo $?) -eq 0 ]; then
         read -a subres <<<$res
       else
         subres=$res
@@ -108,7 +117,7 @@ function search_packages {
 
   for pkg in $searchpkgs ; do
     echo -n "${pkg}: "
-    res=$($pkgmanager | grep $pkg) 
+    res=$($pkgmanager | $GREP $pkg)
     echo $res
   done
 }
@@ -138,10 +147,9 @@ function search_filesystem {
 ###
 # Main
 ###
-get_os
+get_env
 echo '#--------------------------------------#'
 echo "# OS: $OS - hostname: $HOST #"
 search_processes
 search_packages
 search_filesystem
-
