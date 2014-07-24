@@ -2,7 +2,7 @@
 searchprocs="apache httpd java tomcat jboss"
 searchpkgs="apache apache2 java tomcat jboss"
 searchdirs="/opt /etc /export"
-fskeywords="apache Apache java tomcat Tomcat jboss jBoss Jboss"
+fskeywords="[aA]pache java [tT]omcat [jJ][bB]oss"
 #--------------#
 
 function get_os {
@@ -116,10 +116,14 @@ function search_filesystem {
   local name
   local res
   local num=1
-  local findstring="find $searchdirs -type d -name "
+  local findstring="find"
+
+  for dir in $searchdirs ; do
+    [ -d $dir ] && findstring="${findstring} ${dir}"
+  done
 
   for name in $fskeywords ; do
-    [ $num -eq 1 ] && findstring="${findstring} '*${name}*' "
+    [ $num -eq 1 ] && findstring="${findstring} -type d -name '*${name}*' "
     [ $num -gt 1 ] && findstring="${findstring} -o -type d -name '*${name}*' " 
     num=$(( $num +1 )) 
   done
