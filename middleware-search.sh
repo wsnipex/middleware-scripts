@@ -14,7 +14,7 @@ function get_env {
     SunOS)
       OS="solaris"
       pkgmanager="pkginfo"
-      [ $(command_exists /usr/bin/ps) -eq 0 ] && PS=/usr/bin/ps
+      [ $(command_exists /usr/ucb/ps) -eq 0 ] && PS=/usr/ucb/ps
       [ $(command_exists /usr/xpg4/bin/grep) -eq 0 ] && GREP=/usr/xpg4/bin/grep
       ;;
     Linux)
@@ -33,6 +33,12 @@ function command_exists {
   echo $?
 }
 
+function is_inarray () {
+  local e
+  for e in "${@:2}"; do [ "$e" == "$1" ] && return 0; done
+  return 1
+}
+
 function check_return_code {
   local command=$1
   local ret=$2
@@ -43,12 +49,23 @@ function check_return_code {
 
 function check_versions {
   local process=$1
-  local command=$2
+  local input=$2
+  local pid
+  local command
   local output=""
+
+  read -r pid command <<< ${input/@/ }
+  if is_inarray "$command" "${duplicates[@]}"; then
+     [ ${DEBUG} ] && echo "INFO skipping duplicate $command"
+     [ ${DEBUG} ] && echo "dups: ${duplicates[@]}"
+     return
+  else
+     duplicates=(${duplicates[@]} "$command")
+  fi
 
   echo -n "${process}: "
   case $process in
-    httpd)
+    apache|httpd)
       local ap_ld_path=$(dirname $command)/../lib
       [ -x $command ] && output=$(LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH $command -v 2>&1 | cut -d " " -f 3)
       check_return_code $command $?
@@ -78,7 +95,7 @@ function search_processes {
   echo '#---- checking running processes ----#'
   for p in $searchprocs ; do
     echo -n "${p}: "
-    t=$($PS -e -o comm | $GREP $p | $GREP -v grep | sort -u)
+    t=$($PS -axwww | $GREP -iE [^org.]$p | $GREP -v grep | awk '{ print $1"@"$5 }')
     echo $t
     declare result_$p="$t"
   done
@@ -97,6 +114,7 @@ function search_processes {
       fi
 
       for r in ${subres[@]} ; do
+        [ ${DEBUG} ] && echo "CHECK: $p $r"
         check_versions $p $r
       done
     fi
@@ -151,5 +169,5 @@ get_env
 echo '#--------------------------------------#'
 echo "# OS: $OS - hostname: $HOST #"
 search_processes
-search_packages
-search_filesystem
+#search_packages
+#search_filesystem
