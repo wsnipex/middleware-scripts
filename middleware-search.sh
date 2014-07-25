@@ -2,6 +2,7 @@ searchprocs="apache httpd java tomcat jboss"
 searchpkgs="apache apache2 java tomcat jboss"
 searchdirs="/opt /etc /export"
 fskeywords="[aA]pache java [tT]omcat [jJ][bB]oss"
+procfilter=(bash sh LLAWP)
 
 PS=${PS:-"ps"}
 GREP=${GREP:-"grep"}
@@ -43,8 +44,13 @@ function check_return_code {
   local command=$1
   local ret=$2
   if [ $ret -ne 0 ]; then
-    echo -n "ERROR executing $command "
+    echoerr "\"ERROR executing $command\"" 
+    return 1
   fi
+}
+
+function echoerr {
+  cat <<< "$@" 1>&2;
 }
 
 function check_versions {
@@ -55,55 +61,66 @@ function check_versions {
   local output=""
 
   read -r pid command <<< ${input/@/ }
+  if is_inarray "$command" "${procfilter[@]}"; then
+     [ ${DEBUG} ] && echo "INFO skipping $command"
+     return 1
+  fi
   if is_inarray "$command" "${duplicates[@]}"; then
      [ ${DEBUG} ] && echo "INFO skipping duplicate $command"
      [ ${DEBUG} ] && echo "dups: ${duplicates[@]}"
-     return
+     return 1
   else
      duplicates=(${duplicates[@]} "$command")
   fi
 
-  echo -n "${process}: "
   case $process in
     apache|httpd)
       local ap_ld_path=$(dirname $command)/../lib
       [ -x $command ] && output=$(LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH $command -v 2>&1 | cut -d " " -f 3)
       check_return_code $command $?
-      echo $output
       ;;
     tomcat)
       [ $(echo $command | $GREP -q catalina ; echo $?) -eq 0 ] && output=$($command version 2>&1)
       check_return_code $command $?
-      echo $output
       ;;
     java)
-      [ -x $command ] && output=$($command -version 2>&1 | head -1 | cut -d " " -f 3-)
-      check_return_code $command $?
-      echo $output
+      [ -x $command ] && output=$($command -version 2>&1 | head -1 | cut -d " " -f 3- | tr -d \" )
+      if ! check_return_code $command $?; then return 1; fi
       ;;
     jboss)
-      [ $(echo $command | $GREP -q run ; echo $?) -eq 0 ] && output=$($command -V 2>&1) || echo "run.sh not found, process is $command"
+      [ $(echo $command | $GREP -q run ; echo $?) -eq 0 ] && output=$($command -V 2>&1) #|| echo "run.sh not found, process is $command"
       check_return_code $command $?
       ;;
     *)
       echo "NA"
       ;;
   esac
+  if [ $? -eq 0 ] && [ "${output}" != "not found" ]; then
+    echo "${output},"
+  fi
+  unset output
 }
 
 function search_processes {
+  local output
+  local p
+  local t
+  local r
+
   echo '#---- checking running processes ----#'
   for p in $searchprocs ; do
-    echo -n "${p}: "
-    t=$($PS -axwww | $GREP -iE [^org.]$p | $GREP -v grep | awk '{ print $1"@"$5 }')
-    echo $t
+    #echo -n "${p}: "
+    t=$($PS -axwww | $GREP -iE [^org.]$p | $GREP -vE "grep|/bash" | awk '{ print $1"@"$5 }')
+    [ ${DEBUG} ] && echo "${p}: $t"
     declare result_$p="$t"
+    #declare output_$p=""
   done
 
   #echo '#------------------------------------#'
 
   echo '#---- checking versions --------------#'
   for p in $searchprocs ; do
+    output=("$p")
     v=result_$p
     res=${!v}
     if [ ${#res} -gt 0 ]; then
@@ -115,10 +132,14 @@ function search_processes {
 
       for r in ${subres[@]} ; do
         [ ${DEBUG} ] && echo "CHECK: $p $r"
-        check_versions $p $r
+        t="$(check_versions $p $r)"
+        if ! is_inarray "$t" "${output[@]}"; then
+          output=("${output[@]}" "$t")
+        fi
       done
     fi
-    unset subres r
+    echo "${output[@]}"
+    unset output subres r
   done
   echo '#------------------------------------#'
 }
