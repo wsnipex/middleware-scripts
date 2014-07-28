@@ -91,8 +91,10 @@ function check_versions {
       if ! check_return_code $command $?; then return 1; fi
       ;;
     jboss)
-      [ $(echo $command | $GREP -q run ; echo $?) -eq 0 ] && output=$($command -V 2>&1) #|| echo "run.sh not found, process is $command"
-      check_return_code $command $?
+      local java_home="$(dirname $command)/.."
+      local jboss_home=$(${java_home}/bin/jinfo $pid | $GREP jboss.home.dir | cut -d " " -f 3)
+      output=$(JBOSS_HOME=${jboss_home} JAVA_HOME=${java_home} ${jboss_home}/bin/run.sh -V | $GREP -E "^JBoss" | cut -d " " -f 1-2 ; exit ${PIPESTATUS[0]})
+      if ! check_return_code $command $?; then return 1; fi
       ;;
     *)
       echo "NA"
