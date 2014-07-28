@@ -2,7 +2,7 @@ searchprocs="apache httpd java tomcat jboss"
 searchpkgs="apache apache2 java tomcat jboss"
 searchdirs="/opt /etc /export"
 fskeywords="[aA]pache java [tT]omcat [jJ][bB]oss"
-procfilter=(bash sh LLAWP)
+procfilter=(bash sh LLAWP javasrv)
 
 PS=${PS:-"ps -ef"}
 GREP=${GREP:-"grep"}
@@ -62,12 +62,12 @@ function check_versions {
 
   read -r pid command <<< ${input/@/ }
   if is_inarray "$command" "${procfilter[@]}"; then
-     [ ${DEBUG} ] && echo "INFO skipping $command"
+     [ ${DEBUG} ] && echoerr "INFO skipping $command"
      return 1
   fi
   if is_inarray "$command" "${duplicates[@]}"; then
-     [ ${DEBUG} ] && echo "INFO skipping duplicate $command"
-     [ ${DEBUG} ] && echo "dups: ${duplicates[@]}"
+     [ ${DEBUG} ] && echoerr "INFO skipping duplicate $command"
+     [ ${DEBUG} ] && echoerr "dups: ${duplicates[@]}"
      return 1
   else
      duplicates=(${duplicates[@]} "$command")
@@ -81,10 +81,15 @@ function check_versions {
       ;;
     tomcat)
       local java_home="$(dirname $command)/.."
-      local catalina_home=$(${java_home}/bin/jps -lv | $GREP $pid | sed 's/^.*-Dcatalina.home=\(.*\) .*$/\1/g')
-      [ ${DEBUG} ] && echo "INFO java_home=${java_home} catalina_home=$catalina_home"
-      output=$(CATALINA_HOME=${catalina_home} JAVA_HOME=${java_home} ${catalina_home}/bin/version.sh  | $GREP "Server version" | cut -d " " -f 4 ; exit ${PIPESTATUS[0]})
-      if ! check_return_code $command $?; then return 1; fi
+      if [ -x ${java_home}/bin/jps ] ; then 
+        local catalina_home=$(${java_home}/bin/jps -lv | $GREP $pid | sed 's/^.*-Dcatalina.home=\(.*\) .*$/\1/g')
+        if [ -z "${catalina_home}" ]; then echoerr "ERROR: failed to detect CATALINA_HOME"; return 1; fi 
+        local tomcat_command="CATALINA_HOME=${catalina_home} JAVA_HOME=${java_home} sh ${catalina_home}/bin/catalina.sh version"
+        output=$(eval ${tomcat_command} | $GREP "Server version" | cut -d " " -f 4 ; exit ${PIPESTATUS[0]})
+        if ! check_return_code "$tomcat_command" $?; then return 1; fi
+      else
+        echoerr "ERROR: ${java_home}/bin/jps not found"
+      fi
       ;;
     java)
       [ -x $command ] && output=$($command -version 2>&1 | head -1 | cut -d " " -f 3- | tr -d \" )
@@ -92,9 +97,15 @@ function check_versions {
       ;;
     jboss)
       local java_home="$(dirname $command)/.."
-      local jboss_home=$(${java_home}/bin/jinfo $pid | $GREP jboss.home.dir | cut -d " " -f 3)
-      output=$(JBOSS_HOME=${jboss_home} JAVA_HOME=${java_home} ${jboss_home}/bin/run.sh -V | $GREP -E "^JBoss" | cut -d " " -f 1-2 ; exit ${PIPESTATUS[0]})
-      if ! check_return_code $command $?; then return 1; fi
+      if [ -x ${java_home}/bin/jinfo ]; then
+        local jboss_home=$(${java_home}/bin/jinfo $pid | $GREP jboss.home.dir | cut -d " " -f 3)
+        if [ -z "${jboss_home}" ]; then echoerr "ERROR: failed to detect JBOSS_HOME"; return 1; fi 
+        local jboss_command="JBOSS_HOME=${jboss_home} JAVA_HOME=${java_home} sh ${jboss_home}/bin/run.sh -V"
+        output=$(eval ${jboss_command} | $GREP -E "^JBoss" | cut -d " " -f 1-2 ; exit ${PIPESTATUS[0]})
+        if ! check_return_code "$jboss_command" $?; then return 1; fi
+      else
+        echoerr "ERROR: ${java_home}/bin/jinfo not found"
+      fi
       ;;
     *)
       echo "NA"
