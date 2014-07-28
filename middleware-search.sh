@@ -65,13 +65,6 @@ function check_versions {
      [ ${DEBUG} ] && echoerr "INFO skipping $command"
      return 1
   fi
-  if is_inarray "$command" "${duplicates[@]}"; then
-     [ ${DEBUG} ] && echoerr "INFO skipping duplicate $command"
-     [ ${DEBUG} ] && echoerr "dups: ${duplicates[@]}"
-     return 1
-  else
-     duplicates=(${duplicates[@]} "$command")
-  fi
 
   case $process in
     apache|httpd)
@@ -81,9 +74,9 @@ function check_versions {
       ;;
     tomcat)
       local java_home="$(dirname $command)/.."
-      if [ -x ${java_home}/bin/jps ] ; then 
+      if [ -x ${java_home}/bin/jps ] ; then
         local catalina_home=$(${java_home}/bin/jps -lv | $GREP $pid | sed 's/^.*-Dcatalina.home=\(.*\) .*$/\1/g')
-        if [ -z "${catalina_home}" ]; then echoerr "ERROR: failed to detect CATALINA_HOME"; return 1; fi 
+        if [ -z "${catalina_home}" ]; then echoerr "ERROR: failed to detect CATALINA_HOME"; return 1; fi
         local tomcat_command="CATALINA_HOME=${catalina_home} JAVA_HOME=${java_home} sh ${catalina_home}/bin/catalina.sh version"
         output=$(eval ${tomcat_command} | $GREP "Server version" | cut -d " " -f 4 ; exit ${PIPESTATUS[0]})
         if ! check_return_code "$tomcat_command" $?; then return 1; fi
@@ -99,7 +92,7 @@ function check_versions {
       local java_home="$(dirname $command)/.."
       if [ -x ${java_home}/bin/jinfo ]; then
         local jboss_home=$(${java_home}/bin/jinfo $pid | $GREP jboss.home.dir | cut -d " " -f 3)
-        if [ -z "${jboss_home}" ]; then echoerr "ERROR: failed to detect JBOSS_HOME"; return 1; fi 
+        if [ -z "${jboss_home}" ]; then echoerr "ERROR: failed to detect JBOSS_HOME"; return 1; fi
         local jboss_command="JBOSS_HOME=${jboss_home} JAVA_HOME=${java_home} sh ${jboss_home}/bin/run.sh -V"
         output=$(eval ${jboss_command} | $GREP -E "^JBoss" | cut -d " " -f 1-2 ; exit ${PIPESTATUS[0]})
         if ! check_return_code "$jboss_command" $?; then return 1; fi
@@ -143,15 +136,19 @@ function search_processes {
       fi
 
       for r in ${subres[@]} ; do
+      local c="${r/*@/}"
+      if ([ "$p" = "apache" ] || [ "$p" = "httpd" ] || [ "$p" = "java" ] ) && is_inarray "${c}" "${duplicates[@]}"; then : ; else
+        duplicates=("${duplicates[@]}" "${c}")
         [ ${DEBUG} ] && echo "CHECK: $p $r"
         t="$(check_versions $p $r)"
         if ! is_inarray "$t" "${output[@]}"; then
           output=("${output[@]}" "$t")
         fi
+      fi
       done
     fi
     echo "${output[@]}"
-    unset output subres r
+    unset output subres r t p
   done
   echo '#------------------------------------#'
 }
@@ -198,6 +195,8 @@ function search_filesystem {
 ###
 # Main
 ###
+declare -a duplicates
+
 get_env
 echo '#--------------------------------------#'
 echo "# OS: $OS - hostname: $HOST #"
