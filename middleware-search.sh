@@ -76,12 +76,17 @@ function check_versions {
   case $process in
     apache|httpd)
       local ap_ld_path=$(dirname $command)/../lib
-      [ -x $command ] && output=$(LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH $command -v 2>&1 | cut -d " " -f 3)
+      [ -x $command ] && output=$(LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH $command -v 2>&1 | cut -d " " -f 3 ; exit ${PIPESTATUS[0]})
       check_return_code $command $?
       ;;
     tomcat)
       [ $(echo $command | $GREP -q catalina ; echo $?) -eq 0 ] && output=$($command version 2>&1)
       check_return_code $command $?
+      local java_home="$(dirname $command)/.."
+      local catalina_home=$(${java_home}/bin/jps -lv | $GREP $pid | sed 's/^.*-Dcatalina.home=\(.*\) .*$/\1/g')
+      [ ${DEBUG} ] && echo "INFO java_home=${java_home} catalina_home=$catalina_home"
+      output=$(CATALINA_HOME=${catalina_home} JAVA_HOME=${java_home} ${catalina_home}/bin/version.sh  | $GREP "Server version" | cut -d " " -f 4 ; exit ${PIPESTATUS[0]})
+      if ! check_return_code $command $?; then return 1; fi
       ;;
     java)
       [ -x $command ] && output=$($command -version 2>&1 | head -1 | cut -d " " -f 3- | tr -d \" )
@@ -107,16 +112,12 @@ function search_processes {
   local t
   local r
 
-  echo '#---- checking running processes ----#'
+  ([ ${DEBUG} ] || [ ${SHOW_PROCS} ]) && echo '#---- checking running processes ----#'
   for p in $searchprocs ; do
-    #echo -n "${p}: "
     t=$($PS -axwww | $GREP -iE [^org.]$p | $GREP -vE "grep|/bash" | awk '{ print $1"@"$5 }')
-    [ ${DEBUG} ] && echo "${p}: $t"
+    ([ ${DEBUG} ] || [ ${SHOW_PROCS} ]) && echo "${p}: $t"
     declare result_$p="$t"
-    #declare output_$p=""
   done
-
-  #echo '#------------------------------------#'
 
   echo '#---- checking versions --------------#'
   for p in $searchprocs ; do
