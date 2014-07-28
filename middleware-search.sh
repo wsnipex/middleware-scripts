@@ -80,8 +80,6 @@ function check_versions {
       check_return_code $command $?
       ;;
     tomcat)
-      [ $(echo $command | $GREP -q catalina ; echo $?) -eq 0 ] && output=$($command version 2>&1)
-      check_return_code $command $?
       local java_home="$(dirname $command)/.."
       local catalina_home=$(${java_home}/bin/jps -lv | $GREP $pid | sed 's/^.*-Dcatalina.home=\(.*\) .*$/\1/g')
       [ ${DEBUG} ] && echo "INFO java_home=${java_home} catalina_home=$catalina_home"
