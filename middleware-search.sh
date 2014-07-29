@@ -102,7 +102,7 @@ function check_versions {
       local java_home="$(dirname $command)/.."
       local jps="${java_home}/bin/jps"
       [ -x "$jps" ] || jps="$(dirname $(get_newest_java))/jps"
-      local catalina_home=$(${jps} -lv 2>&1 | $GREP $pid | sed 's/^.*-Dcatalina.home=\(.*\) .*$/\1/g')
+      local catalina_home=$(${jps} -lv | $GREP $pid | sed 's/^.*-Dcatalina.home=\(.*\) .*$/\1/g')
       if [ -z "${catalina_home}" ]; then echoerr "ERROR: failed to detect CATALINA_HOME"; return 1; fi
       local tomcat_command="CATALINA_HOME=${catalina_home} JAVA_HOME=${java_home} sh ${catalina_home}/bin/catalina.sh version"
       output=$(eval ${tomcat_command} | $GREP "Server version" | cut -d " " -f 4 ; exit ${PIPESTATUS[0]})
@@ -118,7 +118,18 @@ function check_versions {
       local jinfo="${java_home}/bin/jinfo"
       [ -x ${jinfo} ] || jinfo="$(dirname $(get_newest_java))/jinfo"
       local jboss_home=$(${jinfo} $pid 2>&1 | $GREP jboss.home.dir | cut -d " " -f 3)
-      if [ -z "${jboss_home}" ]; then echoerr "ERROR: failed to detect JBOSS_HOME"; return 1; fi
+      if [ -z "${jboss_home}" ]; then
+        echoerr "INFO: failed to detect JBOSS_HOME - trying classpath..."
+        local classpath=$($PS | $GREP $pid | sed 's/^.*-classpath \(.*\) .*$/\1/g')
+        IFS=":" read -a cparr <<< "$classpath"
+        for p in ${cparr[@]}; do
+          if $(echo "$p" | $GREP -v Main | $GREP -qi jboss) ; then
+            local jbtmp=$p
+          ([ -d $jbtmp ] || [ -f $jbtmp ]) && jboss_home=$(echo $(dirname $jbtmp) | sed -e 's/bin//g' -e 's/lib//g' | sort -u)
+          fi
+        done
+      fi
+      if [ ! -d "${jboss_home}" ]; then echoerr "ERROR: failed to detect JBOSS_HOME"; return 1; fi
       local jboss_command="JBOSS_HOME=${jboss_home} JAVA_HOME=${java_home} sh ${jboss_home}/bin/run.sh -V"
       output=$(eval ${jboss_command} | $GREP -E "^JBoss" | cut -d " " -f 1-2 ; exit ${PIPESTATUS[0]})
       if ! check_return_code "$jboss_command" $?; then return 1; fi
