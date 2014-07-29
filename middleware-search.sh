@@ -125,7 +125,7 @@ function search_processes {
 
   echo '#---- checking versions --------------#'
   for p in $searchprocs ; do
-    output=("$p")
+    output=("${p};")
     v=result_$p
     res=${!v}
     if [ ${#res} -gt 0 ]; then
