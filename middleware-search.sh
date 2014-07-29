@@ -6,6 +6,10 @@ procfilter=(bash sh LLAWP javasrv)
 
 PS=${PS:-"ps -ef"}
 GREP=${GREP:-"grep"}
+
+# global vars
+declare -a duplicates
+java_tmpfile="/tmp/${$}.java"
 #--------------#
 
 function get_env {
@@ -53,6 +57,28 @@ function echoerr {
   cat <<< "$@" 1>&2;
 }
 
+function set_newest_java {
+  local command=$1
+  local newver=$2
+  local oldver
+  local oldcmd
+  local tmp
+
+  [ -f $java_tmpfile ] && read -r oldver oldcmd <<<$(cat $java_tmpfile)
+  tmp=$(echo -e "${oldver}\n${newver}" | sort -r | head -n 1)
+  [ "$tmp" != "$oldver" ] && echo "$tmp" "$command" > $java_tmpfile
+}
+
+function get_newest_java {
+  local ver
+  local cmd
+
+  if [ -f $java_tmpfile ]; then
+    read -r ver cmd <<<$(cat $java_tmpfile)
+    echo $cmd
+  fi
+}
+
 function check_versions {
   local process=$1
   local input=$2
@@ -74,31 +100,28 @@ function check_versions {
       ;;
     tomcat)
       local java_home="$(dirname $command)/.."
-      if [ -x ${java_home}/bin/jps ] ; then
-        local catalina_home=$(${java_home}/bin/jps -lv | $GREP $pid | sed 's/^.*-Dcatalina.home=\(.*\) .*$/\1/g')
-        if [ -z "${catalina_home}" ]; then echoerr "ERROR: failed to detect CATALINA_HOME"; return 1; fi
-        local tomcat_command="CATALINA_HOME=${catalina_home} JAVA_HOME=${java_home} sh ${catalina_home}/bin/catalina.sh version"
-        output=$(eval ${tomcat_command} | $GREP "Server version" | cut -d " " -f 4 ; exit ${PIPESTATUS[0]})
-        if ! check_return_code "$tomcat_command" $?; then return 1; fi
-      else
-        echoerr "ERROR: ${java_home}/bin/jps not found"
-      fi
+      local jps="${java_home}/bin/jps"
+      [ -x "$jps" ] || jps="$(dirname $(get_newest_java))/jps"
+      local catalina_home=$(${jps} -lv 2>&1 | $GREP $pid | sed 's/^.*-Dcatalina.home=\(.*\) .*$/\1/g')
+      if [ -z "${catalina_home}" ]; then echoerr "ERROR: failed to detect CATALINA_HOME"; return 1; fi
+      local tomcat_command="CATALINA_HOME=${catalina_home} JAVA_HOME=${java_home} sh ${catalina_home}/bin/catalina.sh version"
+      output=$(eval ${tomcat_command} | $GREP "Server version" | cut -d " " -f 4 ; exit ${PIPESTATUS[0]})
+      if ! check_return_code "$tomcat_command" $?; then return 1; fi
       ;;
     java)
       [ -x $command ] && output=$($command -version 2>&1 | head -1 | cut -d " " -f 3- | tr -d \" )
       if ! check_return_code $command $?; then return 1; fi
+      set_newest_java "$command" "$output"
       ;;
     jboss)
       local java_home="$(dirname $command)/.."
-      if [ -x ${java_home}/bin/jinfo ]; then
-        local jboss_home=$(${java_home}/bin/jinfo $pid | $GREP jboss.home.dir | cut -d " " -f 3)
-        if [ -z "${jboss_home}" ]; then echoerr "ERROR: failed to detect JBOSS_HOME"; return 1; fi
-        local jboss_command="JBOSS_HOME=${jboss_home} JAVA_HOME=${java_home} sh ${jboss_home}/bin/run.sh -V"
-        output=$(eval ${jboss_command} | $GREP -E "^JBoss" | cut -d " " -f 1-2 ; exit ${PIPESTATUS[0]})
-        if ! check_return_code "$jboss_command" $?; then return 1; fi
-      else
-        echoerr "ERROR: ${java_home}/bin/jinfo not found"
-      fi
+      local jinfo="${java_home}/bin/jinfo"
+      [ -x ${jinfo} ] || jinfo="$(dirname $(get_newest_java))/jinfo"
+      local jboss_home=$(${jinfo} $pid 2>&1 | $GREP jboss.home.dir | cut -d " " -f 3)
+      if [ -z "${jboss_home}" ]; then echoerr "ERROR: failed to detect JBOSS_HOME"; return 1; fi
+      local jboss_command="JBOSS_HOME=${jboss_home} JAVA_HOME=${java_home} sh ${jboss_home}/bin/run.sh -V"
+      output=$(eval ${jboss_command} | $GREP -E "^JBoss" | cut -d " " -f 1-2 ; exit ${PIPESTATUS[0]})
+      if ! check_return_code "$jboss_command" $?; then return 1; fi
       ;;
     *)
       echo "NA"
@@ -108,6 +131,7 @@ function check_versions {
     echo "${output},"
   fi
   unset output
+  return 0
 }
 
 function search_processes {
@@ -195,11 +219,12 @@ function search_filesystem {
 ###
 # Main
 ###
-declare -a duplicates
-
 get_env
 echo '#--------------------------------------#'
 echo "# OS: $OS - hostname: $HOST #"
 search_processes
 #search_packages
 #search_filesystem
+
+# cleanup
+rm $java_tmpfile
