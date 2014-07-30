@@ -1,5 +1,5 @@
-searchprocs="apache httpd java tomcat jboss websphere"
-searchpkgs="apache apache2 java tomcat jboss"
+searchprocs="apache httpd java tomcat jboss websphere python perl"
+searchpkgs="apache apache2 java tomcat jboss python perl"
 searchdirs="/opt /etc /export"
 fskeywords="[aA]pache java [tT]omcat [jJ][bB]oss"
 procfilter=(bash sh LLAWP javasrv)
@@ -162,6 +162,10 @@ function check_versions {
       local ws_home=$(echo $command | $SED 's|\(.*AppServer\).*$|\1/bin|')
       output=$(${ws_home}/versionInfo.sh | $GREP -v Directory | $AWK '/^Version/ { if (length($2)>=4) print $2 }')
       if ! check_return_code "${ws_home}/versionInfo.sh" $?; then return 1; fi
+      ;;
+    python)
+      output=$($command -V 2>&1 | $AWK '{ print $2 }')
+      if ! check_return_code "$command" $?; then return 1; fi
       ;;
     *)
       echo "NA"
