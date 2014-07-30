@@ -1,4 +1,4 @@
-searchprocs="apache httpd java tomcat jboss"
+searchprocs="apache httpd java tomcat jboss websphere"
 searchpkgs="apache apache2 java tomcat jboss"
 searchdirs="/opt /etc /export"
 fskeywords="[aA]pache java [tT]omcat [jJ][bB]oss"
@@ -157,6 +157,11 @@ function check_versions {
       local jboss_command="JBOSS_HOME=${jboss_home} JAVA_HOME=${java_home} sh ${jboss_home}/bin/run.sh -V"
       output=$(eval ${jboss_command} | $GREP -E "^JBoss" | cut -d " " -f 1-2 ; exit ${PIPESTATUS[0]})
       if ! check_return_code "$jboss_command" $?; then return 1; fi
+      ;;
+    websphere)
+      local ws_home=$(echo $command | $SED 's|\(.*AppServer\).*$|\1/bin|')
+      output=$(${ws_home}/versionInfo.sh | $GREP -v Directory | $AWK '/^Version/ { if (length($2)>=4) print $2 }')
+      if ! check_return_code "${ws_home}/versionInfo.sh" $?; then return 1; fi
       ;;
     *)
       echo "NA"
