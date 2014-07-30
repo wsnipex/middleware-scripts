@@ -54,10 +54,16 @@ function command_exists {
   echo $?
 }
 
-function is_inarray () {
+function is_inarray {
   local e
   for e in "${@:2}"; do [ "$e" == "$1" ] && return 0; done
   return 1
+}
+
+function sort_array {
+  local arr
+  arr=($(for e in $*; do echo $e ; done | sort))
+  echo "${arr[@]}"
 }
 
 function check_return_code {
@@ -178,7 +184,7 @@ function search_processes {
 
   echo '#---- checking versions --------------#'
   for p in $searchprocs ; do
-    output=("${p};")
+    output=()
     v=result_$p
     res=${!v}
     if [ ${#res} -gt 0 ]; then
@@ -200,7 +206,7 @@ function search_processes {
       fi
       done
     fi
-    echo "${output[@]}"
+    echo "${p}; $(sort_array "${output[@]}")"
     unset output subres r t p
   done
   echo '#------------------------------------#'
