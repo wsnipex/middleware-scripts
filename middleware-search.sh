@@ -7,6 +7,8 @@ procfilter=(bash sh LLAWP javasrv)
 PS=${PS:-"ps -ef"}
 GREP=${GREP:-"grep"}
 AWK=${AWK:-"awk"}
+SED=${SED:-"sed"}
+HOST=${HOST:-"host"}
 
 # global vars
 declare -a duplicates
@@ -15,7 +17,6 @@ java_tmpfile="/tmp/${$}.java"
 
 function get_env {
   local os=$(uname)
-  HOST="$(host $(hostname))"
   case $os in 
     SunOS)
       OS="solaris"
@@ -23,16 +24,23 @@ function get_env {
       [ $(command_exists /usr/ucb/ps) -eq 0 ] && PS="/usr/ucb/ps -axwww"
       [ $(command_exists /usr/xpg4/bin/grep) -eq 0 ] && GREP="/usr/xpg4/bin/grep"
       [ $(command_exists /usr/bin/awk) -eq 0 ] && AWK="/usr/bin/awk"
+      [ $(command_exists /usr/bin/sed) -eq 0 ] && SED="/usr/bin/sed"
+      [ $(command_exists /usr/sbin/host) -eq 0 ] && HOST="/usr/sbin/host"
       ;;
     Linux)
       OS="linux"
       [ -f /etc/redhat-release ] && pkgmanager="rpm -qa"
       [ -f /etc/debian_version ] && pkgmanager="dpkg -l"
+      [ $(command_exists /usr/bin/awk) -eq 0 ] && AWK="/usr/bin/awk"
+      [ $(command_exists /bin/sed) -eq 0 ] && SED="/bin/sed"
+      [ $(command_exists /usr/bin/host) -eq 0 ] && HOST="/usr/bin/host"
+
       ;;
     *)
       OS="unknown"
       ;;
   esac   
+  HOSTNAME="$($HOST $(hostname))"
 }
 
 function command_exists {
@@ -104,7 +112,7 @@ function check_versions {
       local java_home="$(dirname $command)/.."
       local jps="${java_home}/bin/jps"
       [ -x "$jps" ] || jps="$(dirname $(get_newest_java))/jps"
-      local catalina_home=$(${jps} -lv | $GREP $pid | sed 's/^.*-Dcatalina.home=\(.*\) .*$/\1/g')
+      local catalina_home=$(${jps} -lv | $GREP $pid | $SED 's/^.*-Dcatalina.home=\(.*\) .*$/\1/g')
       if [ -z "${catalina_home}" ]; then echoerr "ERROR: failed to detect CATALINA_HOME"; return 1; fi
       local tomcat_command="CATALINA_HOME=${catalina_home} JAVA_HOME=${java_home} sh ${catalina_home}/bin/catalina.sh version"
       output=$(eval ${tomcat_command} | $GREP "Server version" | cut -d " " -f 4 ; exit ${PIPESTATUS[0]})
@@ -122,12 +130,12 @@ function check_versions {
       local jboss_home=$(${jinfo} $pid 2>&1 | $GREP jboss.home.dir | cut -d " " -f 3)
       if [ -z "${jboss_home}" ]; then
         echoerr "INFO: failed to detect JBOSS_HOME - trying classpath..."
-        local classpath=$($PS | $GREP $pid | sed 's/^.*-classpath \(.*\) .*$/\1/g')
+        local classpath=$($PS | $GREP $pid | $SED 's/^.*-classpath \(.*\) .*$/\1/g')
         IFS=":" read -a cparr <<< "$classpath"
         for p in ${cparr[@]}; do
           if $(echo "$p" | $GREP -v Main | $GREP -qi jboss) ; then
             local jbtmp=$p
-          ([ -d $jbtmp ] || [ -f $jbtmp ]) && jboss_home=$(echo $(dirname $jbtmp) | sed -e 's/bin//g' -e 's/lib//g' | sort -u)
+          ([ -d $jbtmp ] || [ -f $jbtmp ]) && jboss_home=$(echo $(dirname $jbtmp) | $SED -e 's/bin//g' -e 's/lib//g' | sort -u)
           fi
         done
       fi
@@ -234,7 +242,7 @@ function search_filesystem {
 ###
 get_env
 echo '#--------------------------------------#'
-echo "# OS: $OS - hostname: $HOST #"
+echo "# OS: $OS - hostname: $HOSTNAME #"
 search_processes
 #search_packages
 #search_filesystem
