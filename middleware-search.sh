@@ -77,6 +77,7 @@ function set_newest_java {
   [ -f $java_tmpfile ] && read -r oldver oldcmd <<<$(cat $java_tmpfile)
   tmp=$(echo -e "${oldver}\n${newver}" | sort -r | head -n 1)
   [ "$tmp" != "$oldver" ] && echo "$tmp" "$command" > $java_tmpfile
+  return 0
 }
 
 function get_newest_java {
@@ -87,6 +88,7 @@ function get_newest_java {
     read -r ver cmd <<<$(cat $java_tmpfile)
     echo $cmd
   fi
+  return 0
 }
 
 function check_versions {
@@ -148,7 +150,7 @@ function check_versions {
       echo "NA"
       ;;
   esac
-  if [ $? -eq 0 ] && [ "${output}" != "not found" ]; then
+  if [ -n "${output}" ] && [ "${output}" != "not found" ]; then
     echo "${output},"
   fi
   unset output
