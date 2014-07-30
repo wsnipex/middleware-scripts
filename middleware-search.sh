@@ -6,6 +6,7 @@ procfilter=(bash sh LLAWP javasrv)
 
 PS=${PS:-"ps -ef"}
 GREP=${GREP:-"grep"}
+AWK=${AWK:-"awk"}
 
 # global vars
 declare -a duplicates
@@ -20,7 +21,8 @@ function get_env {
       OS="solaris"
       pkgmanager="pkginfo"
       [ $(command_exists /usr/ucb/ps) -eq 0 ] && PS="/usr/ucb/ps -axwww"
-      [ $(command_exists /usr/xpg4/bin/grep) -eq 0 ] && GREP=/usr/xpg4/bin/grep
+      [ $(command_exists /usr/xpg4/bin/grep) -eq 0 ] && GREP="/usr/xpg4/bin/grep"
+      [ $(command_exists /usr/bin/awk) -eq 0 ] && AWK="/usr/bin/awk"
       ;;
     Linux)
       OS="linux"
@@ -153,7 +155,7 @@ function search_processes {
 
   ([ ${DEBUG} ] || [ ${SHOW_PROCS} ]) && echo '#---- checking running processes ----#'
   for p in $searchprocs ; do
-    t=$($PS | $GREP -iE [^org.]$p | $GREP -vE "grep|/bash" | awk '{ print $1"@"$5 }')
+    t=$($PS | $GREP -iE [^org.]$p | $GREP -vE "grep|/bash" | $AWK '{ print $1"@"$5 }')
     ([ ${DEBUG} ] || [ ${SHOW_PROCS} ]) && echo "${p}: $t"
     declare result_$p="$t"
   done
