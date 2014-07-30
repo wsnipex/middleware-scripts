@@ -15,6 +15,12 @@ declare -a duplicates
 java_tmpfile="/tmp/${$}.java"
 #--------------#
 
+function exit_handler {
+  echo "$(basename $0): User aborted, cleaning up"
+  rm -f $java_tmpfile
+  exit 2
+}
+
 function get_env {
   local os=$(uname)
   case $os in 
@@ -242,6 +248,8 @@ function search_filesystem {
 ###
 # Main
 ###
+trap exit_handler 1 2 6 15
+
 get_env
 echo '#--------------------------------------#'
 echo "# OS: $OS - hostname: $HOSTNAME #"
