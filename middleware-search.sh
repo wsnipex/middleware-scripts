@@ -4,7 +4,7 @@ searchdirs="/opt /etc /export"
 fskeywords="[aA]pache java [tT]omcat [jJ][bB]oss"
 procfilter=(bash sh LLAWP javasrv)
 
-PS=${PS:-"ps -ef"}
+PS=${PS:-"ps ax"}
 GREP=${GREP:-"grep"}
 AWK=${AWK:-"awk"}
 SED=${SED:-"sed"}
