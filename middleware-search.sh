@@ -62,7 +62,7 @@ function is_inarray {
 
 function sort_array {
   local arr
-  arr=($(for e in $*; do echo $e ; done | sort))
+  arr=($(for e in $*; do echo "${e}," ; done | sort))
   echo "${arr[@]}"
 }
 
@@ -155,7 +155,9 @@ function check_versions {
       fi
       if [ ! -d "${jboss_home}" ]; then echoerr "ERROR: failed to detect JBOSS_HOME"; return 1; fi
       local jboss_command="JBOSS_HOME=${jboss_home} JAVA_HOME=${java_home} sh ${jboss_home}/bin/run.sh -V"
-      output=$(eval ${jboss_command} | $GREP -E "^JBoss" | cut -d " " -f 1-2 ; exit ${PIPESTATUS[0]})
+      output=$(eval ${jboss_command} | $GREP -i "build" | $SED -e 's/[jJ][bB][oO][sS][sS]//' -e 's/(.*)//'; exit ${PIPESTATUS[0]})
+      #output=$(eval ${jboss_command} | $SED -e 's/[jJ][bB][oO][sS][sS]//' -e 's/(.*)//'; exit ${PIPESTATUS[0]})
+echoerr "JBOSSOUT: pid: $pid command: ${jboss_command} output: ${output}#"
       if ! check_return_code "$jboss_command" $?; then return 1; fi
       ;;
     websphere)
@@ -171,8 +173,8 @@ function check_versions {
       echo "NA"
       ;;
   esac
-  if [ -n "${output}" ] && [ "${output}" != "not found" ]; then
-    echo "${output},"
+  if [ $? -eq 0 ] && [ -n "${output}" ] && [ "${output}" != "not found" ]; then
+    echo "${output}"
   fi
   unset output
   return 0
@@ -210,7 +212,7 @@ function search_processes {
         [ ${DEBUG} ] && echo "CHECK: $p $r"
         t="$(check_versions $p $r)"
         if ! is_inarray "$t" "${output[@]}"; then
-          output=("${output[@]}" "$t")
+          output=("${output[@]}" "${t}")
         fi
       fi
       done
