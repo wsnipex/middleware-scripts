@@ -11,6 +11,9 @@ SED=${SED:-"sed"}
 HOST=${HOST:-"host"}
 
 # global vars
+[ ${TRACE} ] && DEBUG=true
+[ ${DEBUG} ] && SHOW_PROCS=true
+
 declare -a duplicates
 java_tmpfile="/tmp/${$}.java"
 #--------------#
@@ -67,10 +70,12 @@ function sort_array {
 }
 
 function check_return_code {
-  local command=$1
-  local ret=$2
+  local command="$1"
+  local ret="$2"
+  local output="$3"
   if [ $ret -ne 0 ]; then
-    echoerr "\"ERROR executing $command\"" 
+    echoerr "ERROR executing $command"
+    [ $TRACE ] && echoerr "TRACE output: "$output" return: $ret"
     return 1
   fi
 }
@@ -80,8 +85,8 @@ function echoerr {
 }
 
 function set_newest_java {
-  local command=$1
-  local newver=$2
+  local command="$1"
+  local newver="$2"
   local oldver
   local oldcmd
   local tmp
@@ -119,23 +124,31 @@ function check_versions {
   case $process in
     apache|httpd)
       local ap_ld_path=$(dirname $command)/../lib
-      [ -x $command ] && output=$(LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH $command -v 2>&1 | cut -d " " -f 3 ; exit ${PIPESTATUS[0]})
-      check_return_code $command $?
+      [ -x $command ] && output=$(LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH ${command} -v 2>&1 | cut -d " " -f 3 ; exit ${PIPESTATUS[0]})
+      check_return_code "$command" "$?" "$output"
+      ;;
+    java)
+      if [ -x $command ]; then
+        output=$(${command} -version 2>&1 | head -1 | cut -d " " -f 3- | tr -d \"; exit ${PIPESTATUS[0]})
+        if ! check_return_code "$command" "$?" "$output"; then return 1; fi
+        set_newest_java "$command" "$output"
+      else
+        [ $DEBUG ] && echoerr "DEBUG $command not executeable"
+      fi
       ;;
     tomcat)
       local java_home="$(dirname $command)/.."
       local jps="${java_home}/bin/jps"
       [ -x "$jps" ] || jps="$(dirname $(get_newest_java))/jps"
       local catalina_home=$(${jps} -lv | $GREP $pid | $SED 's/^.*-Dcatalina.home=\(.*\) .*$/\1/g')
-      if [ -z "${catalina_home}" ]; then echoerr "ERROR: failed to detect CATALINA_HOME"; return 1; fi
+      if ! [ -d "${catalina_home}" ]; then
+        echoerr "ERROR failed to detect CATALINA_HOME"
+        [ $TRACE ] && echoerr "TRACE catalina_home: ${catalina_home}"
+        return 1
+      fi
       local tomcat_command="CATALINA_HOME=${catalina_home} JAVA_HOME=${java_home} sh ${catalina_home}/bin/catalina.sh version"
       output=$(eval ${tomcat_command} | $GREP "Server version" | cut -d " " -f 4 ; exit ${PIPESTATUS[0]})
-      if ! check_return_code "$tomcat_command" $?; then return 1; fi
-      ;;
-    java)
-      [ -x $command ] && output=$($command -version 2>&1 | head -1 | cut -d " " -f 3- | tr -d \" )
-      if ! check_return_code $command $?; then return 1; fi
-      set_newest_java "$command" "$output"
+      if ! check_return_code "$tomcat_command" "$?" "$output"; then return 1; fi
       ;;
     jboss)
       local java_home="$(dirname $command)/.."
@@ -143,7 +156,7 @@ function check_versions {
       [ -x ${jinfo} ] || jinfo="$(dirname $(get_newest_java))/jinfo"
       local jboss_home=$(${jinfo} $pid 2>&1 | $GREP jboss.home.dir | cut -d " " -f 3)
       if [ -z "${jboss_home}" ]; then
-        echoerr "INFO: failed to detect JBOSS_HOME - trying classpath..."
+        [ $DEBUG ] && echoerr "INFO failed to detect JBOSS_HOME - trying classpath..."
         local classpath=$($PS | $GREP $pid | $SED 's/^.*-classpath \(.*\) .*$/\1/g')
         IFS=":" read -a cparr <<< "$classpath"
         for p in ${cparr[@]}; do
@@ -153,21 +166,24 @@ function check_versions {
           fi
         done
       fi
-      if [ ! -d "${jboss_home}" ]; then echoerr "ERROR: failed to detect JBOSS_HOME"; return 1; fi
+      if [ ! -d "${jboss_home}" ]; then
+        echoerr "ERROR failed to detect JBOSS_HOME"
+        [ $TRACE ] && echoerr "TRACE jboss_home: ${jboss_home}"
+        return 1
+      fi
       local jboss_command="JBOSS_HOME=${jboss_home} JAVA_HOME=${java_home} sh ${jboss_home}/bin/run.sh -V"
       output=$(eval ${jboss_command} | $GREP -i "build" | $SED -e 's/[jJ][bB][oO][sS][sS]//' -e 's/(.*)//'; exit ${PIPESTATUS[0]})
       #output=$(eval ${jboss_command} | $SED -e 's/[jJ][bB][oO][sS][sS]//' -e 's/(.*)//'; exit ${PIPESTATUS[0]})
-echoerr "JBOSSOUT: pid: $pid command: ${jboss_command} output: ${output}#"
-      if ! check_return_code "$jboss_command" $?; then return 1; fi
+      if ! check_return_code "$jboss_command" "$?" "$output"; then return 1; fi
       ;;
     websphere)
       local ws_home=$(echo $command | $SED 's|\(.*AppServer\).*$|\1/bin|')
       output=$(${ws_home}/versionInfo.sh | $GREP -v Directory | $AWK '/^Version/ { if (length($2)>=4) print $2 }')
-      if ! check_return_code "${ws_home}/versionInfo.sh" $?; then return 1; fi
+      if ! check_return_code "${ws_home}/versionInfo.sh" "$?" "$output"; then return 1; fi
       ;;
     python)
       output=$($command -V 2>&1 | $AWK '{ print $2 }')
-      if ! check_return_code "$command" $?; then return 1; fi
+      if ! check_return_code "$command" "$?" "$output"; then return 1; fi
       ;;
     *)
       echo "NA"
