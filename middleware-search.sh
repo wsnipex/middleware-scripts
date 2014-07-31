@@ -328,4 +328,4 @@ search_processes
 #search_filesystem
 
 # cleanup
-rm $java_tmpfile $proc_filter_file
+rm -f $java_tmpfile $proc_filter_file
