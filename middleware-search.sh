@@ -155,13 +155,30 @@ function check_versions {
       local jps="${java_home}/bin/jps"
       [ -x "$jps" ] || jps="$(dirname $(get_newest_java))/jps"
       local catalina_home=$(${jps} -lv | $GREP $pid | $SED 's/^.*-Dcatalina.home=\(.*\) .*$/\1/g')
-      if ! [ -d "${catalina_home}" ]; then
+      [ ! -d "${catalina_home}" ] && catalina_home=$($PS | $GREP $pid | $SED 's/^.*-Dcatalina.home=\(.*\) -.*/\1/g')
+      if [ ! -d "${catalina_home}" ]; then
+        [ $DEBUG ] && echoerr "INFO failed to detect CATALINA_HOME - trying classpath..."
+        local classpath=$($PS | $GREP $pid | $SED 's/^.*-classpath \(.*\) .*$/\1/g')
+        IFS=":" read -a cparr <<< "$classpath"
+        [ $TRACE ] && echoerr "TRACE classpath: $(echo ${cparr[@]} | sort -u)"
+        for p in ${cparr[@]}; do
+          if $(echo "$p" | $GREP -v Main | $GREP -qi tomcat) ; then
+            local tctmp=$p
+          ([ -d $tctmp ] || [ -f $tctmp ]) && catalina_home=$(echo $(dirname $tctmp) | $SED -e 's/bin//g' -e 's/lib//g' | sort -u)
+          fi
+        done
+      fi
+      if [ ! -d "${catalina_home}" ]; then
         echoerr "ERROR failed to detect CATALINA_HOME"
         [ $TRACE ] && echoerr "TRACE catalina_home: ${catalina_home}"
         return 1
       fi
       local tomcat_command="CATALINA_HOME=${catalina_home} JAVA_HOME=${java_home} sh ${catalina_home}/bin/catalina.sh version"
       output=$(eval ${tomcat_command} | $GREP "Server version" | cut -d " " -f 4 ; exit ${PIPESTATUS[0]})
+      if ! check_return_code "$tomcat_command" "$?" "$output"; then
+        tomcat_command="JAVA_HOME=${java_home} sh ${catalina_home}/bin/catalina.sh"
+        output=$(eval ${tomcat_command} 2>&1 | grep CATALINA_HOME | sed 's/.*-\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/'; exit ${PIPESTATUS[0]})
+      fi
       if ! check_return_code "$tomcat_command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
       ;;
     jboss)
@@ -173,6 +190,7 @@ function check_versions {
         [ $DEBUG ] && echoerr "INFO failed to detect JBOSS_HOME - trying classpath..."
         local classpath=$($PS | $GREP $pid | $SED 's/^.*-classpath \(.*\) .*$/\1/g')
         IFS=":" read -a cparr <<< "$classpath"
+        [ $TRACE ] && echoerr "TRACE classpath: $(echo ${cparr[@]} | sort -u)"
         for p in ${cparr[@]}; do
           if $(echo "$p" | $GREP -v Main | $GREP -qi jboss) ; then
             local jbtmp=$p
