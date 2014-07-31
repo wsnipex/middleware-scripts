@@ -2,7 +2,7 @@ searchprocs="apache httpd java tomcat jboss websphere python perl"
 searchpkgs="apache apache2 java tomcat jboss python perl"
 searchdirs="/opt /etc /export"
 fskeywords="[aA]pache java [tT]omcat [jJ][bB]oss"
-procfilter=(bash sh LLAWP javasrv)
+procfilter="bash sh LLAWP javasrv"
 
 PS=${PS:-"ps ax"}
 GREP=${GREP:-"grep"}
@@ -16,11 +16,12 @@ HOST=${HOST:-"host"}
 
 declare -a duplicates
 java_tmpfile="/tmp/${$}.java"
+proc_filter_file="/tmp/${$}.filter"
 #--------------#
 
 function exit_handler {
   echo "$(basename $0): User aborted, cleaning up"
-  rm -f $java_tmpfile
+  rm -f $java_tmpfile $proc_filter_file
   exit 2
 }
 
@@ -108,6 +109,17 @@ function get_newest_java {
   return 0
 }
 
+function set_procfilter {
+  echo "$1" >> $proc_filter_file
+}
+
+function is_inprocfilter {
+  [ -f $proc_filter_file ] || return 1
+  $GREP -q "$1" $proc_filter_file && return 0
+  return 1
+}
+
+
 function check_versions {
   local process=$1
   local input=$2
@@ -116,7 +128,7 @@ function check_versions {
   local output=""
 
   read -r pid command <<< ${input/@/ }
-  if is_inarray "$command" "${procfilter[@]}"; then
+  if is_inprocfilter "$command"; then
      [ ${DEBUG} ] && echoerr "INFO skipping $command"
      return 1
   fi
@@ -133,7 +145,9 @@ function check_versions {
         if ! check_return_code "$command" "$?" "$output"; then return 1; fi
         set_newest_java "$command" "$output"
       else
+        set_procfilter "$command"
         [ $DEBUG ] && echoerr "DEBUG $command not executeable"
+        return 1
       fi
       ;;
     tomcat)
@@ -148,7 +162,7 @@ function check_versions {
       fi
       local tomcat_command="CATALINA_HOME=${catalina_home} JAVA_HOME=${java_home} sh ${catalina_home}/bin/catalina.sh version"
       output=$(eval ${tomcat_command} | $GREP "Server version" | cut -d " " -f 4 ; exit ${PIPESTATUS[0]})
-      if ! check_return_code "$tomcat_command" "$?" "$output"; then return 1; fi
+      if ! check_return_code "$tomcat_command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
       ;;
     jboss)
       local java_home="$(dirname $command)/.."
@@ -173,17 +187,16 @@ function check_versions {
       fi
       local jboss_command="JBOSS_HOME=${jboss_home} JAVA_HOME=${java_home} sh ${jboss_home}/bin/run.sh -V"
       output=$(eval ${jboss_command} | $GREP -i "build" | $SED -e 's/[jJ][bB][oO][sS][sS]//' -e 's/(.*)//'; exit ${PIPESTATUS[0]})
-      #output=$(eval ${jboss_command} | $SED -e 's/[jJ][bB][oO][sS][sS]//' -e 's/(.*)//'; exit ${PIPESTATUS[0]})
-      if ! check_return_code "$jboss_command" "$?" "$output"; then return 1; fi
+      if ! check_return_code "$jboss_command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
       ;;
     websphere)
       local ws_home=$(echo $command | $SED 's|\(.*AppServer\).*$|\1/bin|')
       output=$(${ws_home}/versionInfo.sh | $GREP -v Directory | $AWK '/^Version/ { if (length($2)>=4) print $2 }')
-      if ! check_return_code "${ws_home}/versionInfo.sh" "$?" "$output"; then return 1; fi
+      if ! check_return_code "${ws_home}/versionInfo.sh" "$?" "$output"; then set_procfilter "$command"; return 1; fi
       ;;
     python)
       output=$($command -V 2>&1 | $AWK '{ print $2 }')
-      if ! check_return_code "$command" "$?" "$output"; then return 1; fi
+      if ! check_return_code "$command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
       ;;
     *)
       echo "NA"
@@ -287,11 +300,14 @@ function search_filesystem {
 trap exit_handler 1 2 6 15
 
 get_env
+echo "$procfilter" | tr ' ' '\n' > $proc_filter_file
+
 echo '#--------------------------------------#'
 echo "# OS: $OS - hostname: $HOSTNAME #"
+
 search_processes
 #search_packages
 #search_filesystem
 
 # cleanup
-rm $java_tmpfile
+rm $java_tmpfile $proc_filter_file
