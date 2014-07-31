@@ -201,12 +201,15 @@ function search_processes {
   local p
   local t
   local r
+  local f='grep|/bash'
 
-  ([ ${DEBUG} ] || [ ${SHOW_PROCS} ]) && echo '#---- checking running processes ----#'
+  [ ${SHOW_PROCS} ] && echo '#---- checking running processes ----#'
   for p in $searchprocs ; do
-    t=$($PS | $GREP -iE '[^org.]'"$p" | $GREP -vE 'grep|/bash' | $AWK '{ print $1"@"$5 }')
-    ([ ${DEBUG} ] || [ ${SHOW_PROCS} ]) && echo "${p}: $t"
+    [ "$p" == "apache" ] && ef='|org.apache'
+    t=$($PS | $GREP -i "${p}" | $GREP -vE "${f}${ef}" | $AWK '{ print $1"@"$5 }')
+    [ ${SHOW_PROCS} ] && echo "${p}: $t"
     declare result_$p="$t"
+    unset ef
   done
 
   echo '#---- checking versions --------------#'
