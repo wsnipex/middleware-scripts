@@ -216,6 +216,10 @@ function check_versions {
       output=$($command -V 2>&1 | $AWK '{ print $2 }')
       if ! check_return_code "$command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
       ;;
+    perl)
+      output=$($command -v | $GREP "This is perl" | $SED 's/.*v\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/')
+      if ! check_return_code "$command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
+      ;;
     *)
       echo "NA"
       ;;
