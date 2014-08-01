@@ -184,7 +184,7 @@ function check_versions {
       output=$(eval ${tomcat_command} | $GREP -iE "version.*tomcat" | sed 's/.*\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/' ; exit ${PIPESTATUS[0]})
       if ! check_return_code "$tomcat_command" "$?" "$output"; then
         tomcat_command="JAVA_HOME=${java_home} sh ${catalina_home}/bin/catalina.sh"
-        output=$(eval ${tomcat_command} 2>&1 | grep CATALINA_HOME | sed 's/.*-\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/'; exit ${PIPESTATUS[0]})
+        output=$(eval ${tomcat_command} 2>&1 | grep CATALINA_HOME | sed 's/.*-\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/'; exit ${PIPESTATUS[1]})
       fi
       if ! check_return_code "$tomcat_command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
       ;;
