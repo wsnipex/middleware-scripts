@@ -155,7 +155,9 @@ function check_versions {
       local jps="${java_home}/bin/jps"
       [ -x "$jps" ] || jps="$(dirname $(get_newest_java))/jps"
       local catalina_home=$(${jps} -lv | $GREP $pid | $SED 's/^.*-Dcatalina.home=\(.*\) .*$/\1/g')
+      [ $TRACE ] && echoerr "TRACE catalina_home1: ${catalina_home}"
       [ ! -d "${catalina_home}" ] && catalina_home=$($PS | $GREP $pid | $SED 's/^.*-Dcatalina.home=\(.*\) -.*/\1/g')
+      [ $TRACE ] && echoerr "TRACE catalina_home2: ${catalina_home}"
       if [ ! -d "${catalina_home}" ]; then
         [ $DEBUG ] && echoerr "INFO failed to detect CATALINA_HOME - trying classpath..."
         local classpath=$($PS | $GREP $pid | $SED 's/^.*-classpath \(.*\) .*$/\1/g')
@@ -164,17 +166,22 @@ function check_versions {
         for p in ${cparr[@]}; do
           if $(echo "$p" | $GREP -v Main | $GREP -qi tomcat) ; then
             local tctmp=$p
-          ([ -d $tctmp ] || [ -f $tctmp ]) && catalina_home=$(echo $(dirname $tctmp) | $SED -e 's/bin//g' -e 's/lib//g' | sort -u)
+            if [ -d $tctmp ] || [ -f $tctmp ]; then
+              local catalina_home_t=$(echo $(dirname $tctmp) | $SED -e 's/bin//g' -e 's/lib//g' | sort -u)
+              [ -f ${catalina_home_t}/bin/catalina.sh ] && catalina_home="$catalina_home_t"
+              [ $TRACE ] && echoerr "TRACE catalina_home3: ${catalina_home}"
+            fi
           fi
         done
       fi
       if [ ! -d "${catalina_home}" ]; then
         echoerr "ERROR failed to detect CATALINA_HOME"
-        [ $TRACE ] && echoerr "TRACE catalina_home: ${catalina_home}"
+        [ $TRACE ] && echoerr "TRACE catalina_home_final: ${catalina_home}"
         return 1
       fi
       local tomcat_command="CATALINA_HOME=${catalina_home} JAVA_HOME=${java_home} sh ${catalina_home}/bin/catalina.sh version"
-      output=$(eval ${tomcat_command} | $GREP "Server version" | cut -d " " -f 4 ; exit ${PIPESTATUS[0]})
+      [ $TRACE ] && echoerr "TRACE tomcat_command: $tomcat_command"
+      output=$(eval ${tomcat_command} | $GREP -iE "version.*tomcat" | sed 's/.*\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/' ; exit ${PIPESTATUS[0]})
       if ! check_return_code "$tomcat_command" "$?" "$output"; then
         tomcat_command="JAVA_HOME=${java_home} sh ${catalina_home}/bin/catalina.sh"
         output=$(eval ${tomcat_command} 2>&1 | grep CATALINA_HOME | sed 's/.*-\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/'; exit ${PIPESTATUS[0]})
@@ -194,7 +201,10 @@ function check_versions {
         for p in ${cparr[@]}; do
           if $(echo "$p" | $GREP -v Main | $GREP -qi jboss) ; then
             local jbtmp=$p
-          ([ -d $jbtmp ] || [ -f $jbtmp ]) && jboss_home=$(echo $(dirname $jbtmp) | $SED -e 's/bin//g' -e 's/lib//g' | sort -u)
+            if [ -d $jbtmp ] || [ -f $jbtmp ]; then
+              jboss_home=$(echo $(dirname $jbtmp) | $SED -e 's/bin//g' -e 's/lib//g' | sort -u)
+              [ -f ${jboss_home}/bin/run.sh ] && break
+            fi
           fi
         done
       fi
@@ -241,6 +251,7 @@ function search_processes {
   [ ${SHOW_PROCS} ] && echo '#---- checking running processes ----#'
   for p in $searchprocs ; do
     [ "$p" == "apache" ] && ef='|org.apache'
+    [ "$p" == "jboss" ] && ef='|jbossall-client'
     t=$($PS | $GREP -i "${p}" | $GREP -vE "${f}${ef}" | $AWK '{ print $1"@"$5 }')
     [ ${SHOW_PROCS} ] && echo "${p}: $t"
     declare result_$p="$t"
