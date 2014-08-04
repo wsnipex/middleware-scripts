@@ -258,6 +258,7 @@ function search_processes {
   for p in $searchprocs ; do
     [ "$p" == "apache" ] && ef='|org.apache'
     [ "$p" == "jboss" ] && ef='|jbossall-client'
+    [ "$p" == "websphere" ] && ef='|InformationServer'
     t=$($PS | $GREP -i "${p}" | $GREP -vE "${f}${ef}" | $AWK '{ print $1"@"$5 }')
     [ ${SHOW_PROCS} ] && echo "${p}: $t"
     declare result_$p="$t"
