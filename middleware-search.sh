@@ -3,6 +3,9 @@ searchpkgs="apache apache2 java tomcat jboss python perl"
 searchdirs="/opt /etc /export"
 fskeywords="[aA]pache java [tT]omcat [jJ][bB]oss"
 procfilter="bash sh LLAWP javasrv"
+output_fieldseparator=';'
+output_valueseparator=' '
+
 
 PS=${PS:-"ps ax"}
 GREP=${GREP:-"grep"}
@@ -66,7 +69,7 @@ function is_inarray {
 
 function sort_array {
   local arr
-  arr=($(for e in $*; do echo "${e}," ; done | sort))
+  arr=($(for e in $*; do echo "${e}${output_valueseparator}"; done | sort))
   echo "${arr[@]}"
 }
 
@@ -295,7 +298,7 @@ function search_processes {
         fi
       done
     fi
-    echo "${p}; $(sort_array "${output[@]}"); $(sort_array "${net[@]}")"
+    echo "${p}${output_fieldseparator} $(sort_array "${output[@]}")${output_fieldseparator} $(sort_array "${net[@]}")"
     unset output subres r t p
   done
   echo '#------------------------------------#'
