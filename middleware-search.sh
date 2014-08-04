@@ -14,7 +14,6 @@ HOST=${HOST:-"host"}
 [ ${TRACE} ] && DEBUG=true
 [ ${DEBUG} ] && SHOW_PROCS=true
 
-declare -a duplicates
 java_tmpfile="/tmp/${$}.java"
 proc_filter_file="/tmp/${$}.filter"
 #--------------#
@@ -36,6 +35,7 @@ function get_env {
       [ $(command_exists /usr/bin/nawk) -eq 0 ] && AWK="/usr/bin/nawk"
       [ $(command_exists /usr/bin/sed) -eq 0 ] && SED="/usr/bin/sed"
       [ $(command_exists /usr/sbin/host) -eq 0 ] && HOST="/usr/sbin/host"
+      [ $(command_exists /usr/proc/bin/pfiles) -eq 0 ] && PFILES="/usr/proc/bin/pfiles"
       ;;
     Linux)
       OS="linux"
@@ -243,10 +243,13 @@ function check_versions {
 
 function search_processes {
   local output
+  local net
   local p
   local t
   local r
   local f='grep|/bash'
+  declare -a duplicates_proc
+  declare -a duplicates_net
 
   [ ${SHOW_PROCS} ] && echo '#---- checking running processes ----#'
   for p in $searchprocs ; do
@@ -261,6 +264,7 @@ function search_processes {
   echo '#---- checking versions --------------#'
   for p in $searchprocs ; do
     output=()
+    net=()
     v=result_$p
     res=${!v}
     if [ ${#res} -gt 0 ]; then
@@ -271,21 +275,56 @@ function search_processes {
       fi
 
       for r in ${subres[@]} ; do
-      local c="${r/*@/}"
-      if ([ "$p" = "apache" ] || [ "$p" = "httpd" ] || [ "$p" = "java" ] ) && is_inarray "${c}" "${duplicates[@]}"; then : ; else
-        duplicates=("${duplicates[@]}" "${c}")
-        [ ${DEBUG} ] && echo "CHECK: $p $r"
-        t="$(check_versions $p $r)"
-        if ! is_inarray "$t" "${output[@]}"; then
-          output=("${output[@]}" "${t}")
+        local c="${r/*@/}"
+        local pid="${r/@*/}"
+        if ([ "$p" = "apache" ] || [ "$p" = "httpd" ] || [ "$p" = "java" ] ) && is_inarray "${c}" "${duplicates_proc[@]}"; then : ; else
+          duplicates_proc=("${duplicates_proc[@]}" "${c}")
+          [ ${DEBUG} ] && echoerr "PROCCHECK: $p $r"
+          local t="$(check_versions $p $r)"
+          if ! is_inarray "$t" "${output[@]}"; then
+            output=("${output[@]}" "${t}")
+          fi
         fi
-      fi
+        if [ "$p" = "java" ] || is_inarray "${pid}" "${duplicates_net[@]}"; then : ; else
+          duplicates_net=("${duplicates_net[@]}" "${pid}")
+          [ ${DEBUG} ] && echoerr "NETCHECK: $p $pid"
+          local n="$(get_proc_tcpports $pid)"
+          if ! is_inarray "$n" "${net[@]}"; then
+            net=("${net[@]}" "${n}")
+          fi
+        fi
       done
     fi
-    echo "${p}; $(sort_array "${output[@]}")"
+    echo "${p}; $(sort_array "${output[@]}"); $(sort_array "${net[@]}")"
     unset output subres r t p
   done
   echo '#------------------------------------#'
+}
+
+function get_proc_tcpports {
+  local pid=$1
+
+  case $OS in
+  solaris)
+    local ips=$($PFILES $pid 2>/dev/null | $AWK '/sockname: AF_INET/ {x=$3;y=$5; getline; if($0 !~ /peername/ )  print x":"y }' | sort -u | tr '\n' ' '; exit ${PIPESTATUS[0]})
+    local ret=$?
+    ;;
+  linux)
+    local ips=$(netstat -anltp 2>/dev/null | $AWK "/LISTEN.*$pid/ {print \$4}"; exit ${PIPESTATUS[0]})
+    local ret=$?
+    ;;
+  *)
+    echoerr "ERROR get_proc_tcpports: unknown OS"
+    return 1
+    ;;
+  esac
+
+  [ ${DEBUG} ] && echoerr "IPS $pid: ${ips}"
+  if [ $ret -eq 0 ]; then
+    echo "$ips"
+  else
+    echoerr "ERROR checking listen IPs for pid: $pid return code: $?"
+  fi
 }
 
 function search_packages {
