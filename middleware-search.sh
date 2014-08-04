@@ -1,5 +1,5 @@
-searchprocs="apache httpd java tomcat jboss websphere python perl"
-searchpkgs="apache apache2 java tomcat jboss python perl"
+searchprocs="apache httpd java tomcat jboss websphere python perl php"
+searchpkgs="apache apache2 java tomcat jboss python perl php"
 searchdirs="/opt /etc /export"
 fskeywords="[aA]pache java [tT]omcat [jJ][bB]oss"
 procfilter="bash sh LLAWP javasrv"
@@ -233,6 +233,10 @@ function check_versions {
       ;;
     perl)
       output=$($command -v | $GREP "This is perl" | $SED 's/.*v\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/')
+      if ! check_return_code "$command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
+      ;;
+    php)
+      output=$($command -v | head -n 1 | sed 's/^PHP \([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/')
       if ! check_return_code "$command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
       ;;
     *)
