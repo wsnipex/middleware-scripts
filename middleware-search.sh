@@ -156,8 +156,10 @@ function check_versions {
     tomcat)
       local java_home="$(dirname $command)/.."
       local jps="${java_home}/bin/jps"
-      [ -x "$jps" ] || jps="$(dirname $(get_newest_java))/jps"
-      local catalina_home=$(${jps} -lv | $GREP $pid | $SED 's/^.*-Dcatalina.home=\(.*\) .*$/\1/g')
+      if [ ! -x "$jps" ]; then
+        jps="$(dirname $(get_newest_java))/jps)"
+        [ -x "$jps" ] && local catalina_home=$(${jps} -lv | $GREP $pid | $SED 's/^.*-Dcatalina.home=\(.*\) .*$/\1/g')
+      fi
       [ $TRACE ] && echoerr "TRACE catalina_home1: ${catalina_home}"
       [ ! -d "${catalina_home}" ] && catalina_home=$($PS | $GREP $pid | $SED 's/^.*-Dcatalina.home=\(.*\) -.*/\1/g')
       [ $TRACE ] && echoerr "TRACE catalina_home2: ${catalina_home}"
