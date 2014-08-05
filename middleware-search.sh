@@ -85,7 +85,7 @@ function check_return_code {
 }
 
 function echoerr {
-  cat <<< "$@" 1>&2;
+  echo "$@" 1>&2;
 }
 
 function set_newest_java {
@@ -95,7 +95,10 @@ function set_newest_java {
   local oldcmd
   local tmp
 
-  [ -f $java_tmpfile ] && read -r oldver oldcmd <<<$(cat $java_tmpfile)
+  if [ -f $java_tmpfile ]; then
+    oldver=$($AWK '{ print $1 }' $java_tmpfile)
+    oldcmd=$($AWK '{ print $2 }' $java_tmpfile)
+  fi
   tmp=$(echo -e "${oldver}\n${newver}" | sort -r | head -n 1)
   [ "$tmp" != "$oldver" ] && echo "$tmp" "$command" > $java_tmpfile
   return 0
@@ -106,7 +109,8 @@ function get_newest_java {
   local cmd
 
   if [ -f $java_tmpfile ]; then
-    read -r ver cmd <<<$(cat $java_tmpfile)
+    ver=$($AWK '{ print $1 }' $java_tmpfile)
+    cmd=$($AWK '{ print $2 }' $java_tmpfile)
     echo $cmd
   fi
   return 0
@@ -130,7 +134,8 @@ function check_versions {
   local command
   local output=""
 
-  read -r pid command <<< ${input/@/ }
+  pid=$(echo $input | $AWK -F"@" '{ print $1 }')
+  command=$(echo $input | $AWK -F"@" '{ print $2 }')
   if is_inprocfilter "$command"; then
      [ ${DEBUG} ] && echoerr "INFO skipping $command"
      return 1
@@ -166,7 +171,7 @@ function check_versions {
       if [ ! -d "${catalina_home}" ]; then
         [ $DEBUG ] && echoerr "INFO failed to detect CATALINA_HOME - trying classpath..."
         local classpath=$($PS | $GREP $pid | $SED 's/^.*-classpath \(.*\) .*$/\1/g')
-        IFS=":" read -a cparr <<< "$classpath"
+        declare -a cparr=($(echo "$classpath" | $SED 's/:/ /g'))
         [ $TRACE ] && echoerr "TRACE classpath: $(echo ${cparr[@]} | sort -u)"
         for p in ${cparr[@]}; do
           if $(echo "$p" | $GREP -v Main | $GREP -qi tomcat) ; then
@@ -201,7 +206,7 @@ function check_versions {
       if [ -z "${jboss_home}" ]; then
         [ $DEBUG ] && echoerr "INFO failed to detect JBOSS_HOME - trying classpath..."
         local classpath=$($PS | $GREP $pid | $SED 's/^.*-classpath \(.*\) .*$/\1/g')
-        IFS=":" read -a cparr <<< "$classpath"
+        declare -a cparr=($(echo "$classpath" | $SED 's/:/ /g'))
         [ $TRACE ] && echoerr "TRACE classpath: $(echo ${cparr[@]} | sort -u)"
         for p in ${cparr[@]}; do
           if $(echo "$p" | $GREP -v Main | $GREP -qi jboss) ; then
@@ -278,34 +283,28 @@ function search_processes {
     net=()
     v=result_$p
     res=${!v}
-    if [ ${#res} -gt 0 ]; then
-      if [ $(echo $res | $GREP -qE " "; echo $?) -eq 0 ]; then
-        read -a subres <<<$res
-      else
-        subres=$res
-      fi
 
-      for r in ${subres[@]} ; do
-        local c="${r/*@/}"
-        local pid="${r/@*/}"
-        if ([ "$p" = "apache" ] || [ "$p" = "httpd" ] || [ "$p" = "java" ] ) && is_inarray "${c}" "${duplicates_proc[@]}"; then : ; else
-          duplicates_proc=("${duplicates_proc[@]}" "${c}")
-          [ ${DEBUG} ] && echoerr "PROCCHECK: $p $r"
-          local t="$(check_versions $p $r)"
-          if ! is_inarray "$t" "${output[@]}"; then
-            output=("${output[@]}" "${t}")
-          fi
+    for r in ${res} ; do
+      local c="${r/*@/}"
+      local pid="${r/@*/}"
+      if ([ "$p" = "apache" ] || [ "$p" = "httpd" ] || [ "$p" = "java" ] ) && is_inarray "${c}" "${duplicates_proc[@]}"; then : ; else
+        duplicates_proc=("${duplicates_proc[@]}" "${c}")
+        [ ${DEBUG} ] && echoerr "PROCCHECK: $p $r"
+        local t="$(check_versions $p $r)"
+        if ! is_inarray "$t" "${output[@]}"; then
+          output=("${output[@]}" "${t}")
         fi
-        if [ "$p" = "java" ] || is_inarray "${pid}" "${duplicates_net[@]}"; then : ; else
-          duplicates_net=("${duplicates_net[@]}" "${pid}")
-          [ ${DEBUG} ] && echoerr "NETCHECK: $p $pid"
-          local n="$(get_proc_tcpports $pid)"
-          if ! is_inarray "$n" "${net[@]}"; then
-            net=("${net[@]}" "${n}")
-          fi
+      fi
+      if [ "$p" = "java" ] || is_inarray "${pid}" "${duplicates_net[@]}"; then : ; else
+        duplicates_net=("${duplicates_net[@]}" "${pid}")
+        [ ${DEBUG} ] && echoerr "NETCHECK: $p $pid"
+        local n="$(get_proc_tcpports $pid)"
+        if ! is_inarray "$n" "${net[@]}"; then
+          net=("${net[@]}" "${n}")
         fi
-      done
-    fi
+      fi
+    done
+
     if [ $CVS_OUTPUT ]; then
       local cvs="$(sort_array "${output[@]}")${output_fieldseparator}$(sort_array "${net[@]}")"
       local cvs_header="${cvs_header}${p}_version;${p}_IPs;"
