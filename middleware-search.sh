@@ -324,7 +324,7 @@ function get_proc_tcpports {
 
   case $OS in
   solaris)
-    local ips=$($PFILES $pid 2>/dev/null | $AWK '/sockname: AF_INET/ {x=$3;y=$5; getline; if($0 !~ /peername/ )  print x":"y }' | sort -u | tr '\n' ' '; exit ${PIPESTATUS[0]})
+    local ips=$($PFILES $pid 2>/dev/null | $AWK '/sockname: AF_INET/ {x=$3;y=$5; getline; if($0 !~ /peername/ )  print x":"y }' | sort -u | $SED 's/0.0.0.0:0//g' | tr '\n' ' '; exit ${PIPESTATUS[0]})
     local ret=$?
     ;;
   linux)
