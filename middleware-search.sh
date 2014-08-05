@@ -53,7 +53,7 @@ function get_env {
       OS="unknown"
       ;;
   esac   
-  HOSTNAME="$($HOST $(hostname))"
+  HOSTNAME="$($HOST $(hostname) | $AWK '{ print $1 }')"
 }
 
 function command_exists {
@@ -259,6 +259,7 @@ function search_processes {
   local f='grep|/bash'
   declare -a duplicates_proc
   declare -a duplicates_net
+  declare -a cvs_out=("${HOSTNAME}")
 
   [ ${SHOW_PROCS} ] && echo '#---- checking running processes ----#'
   for p in $searchprocs ; do
@@ -305,9 +306,16 @@ function search_processes {
         fi
       done
     fi
-    echo "${p}${output_fieldseparator} $(sort_array "${output[@]}")${output_fieldseparator} $(sort_array "${net[@]}")"
+    if [ $CVS_OUTPUT ]; then
+      local cvs="$(sort_array "${output[@]}")${output_fieldseparator}$(sort_array "${net[@]}")"
+      local cvs_header="${cvs_header}${p}_version;${p}_IPs;"
+      cvs_out=("${cvs_out[@]}" ${output_fieldseparator} "${cvs}")
+    else
+      echo "${p}${output_fieldseparator} $(sort_array "${output[@]}")${output_fieldseparator} $(sort_array "${net[@]}")"
+    fi
     unset output subres r t p
   done
+  [ $CVS_OUTPUT ] && echo "hostname;${cvs_header}" && echo "${cvs_out[@]}"
   echo '#------------------------------------#'
 }
 
