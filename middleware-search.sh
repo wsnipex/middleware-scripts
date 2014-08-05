@@ -139,7 +139,7 @@ function check_versions {
   case $process in
     apache|httpd)
       local ap_ld_path=$(dirname $command)/../lib
-      [ -x $command ] && output=$(LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH ${command} -v 2>&1 | cut -d " " -f 3 ; exit ${PIPESTATUS[0]})
+      [ -x $command ] && output=$(LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH ${command} -v 2>&1 | cut -d " " -f 3 | $SED 's|Apache/||' ; exit ${PIPESTATUS[0]})
       check_return_code "$command" "$?" "$output"
       ;;
     java)
