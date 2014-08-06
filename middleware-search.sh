@@ -40,7 +40,7 @@ function exit_handler {
 }
 
 function get_env {
-  local os=$(uname)
+  typeset os=$(uname)
   case $os in 
     SunOS)
       OS="solaris"
@@ -74,21 +74,24 @@ function command_exists {
 }
 
 function is_inarray {
-  local e
-  for e in "${@:2}"; do [ "$e" == "$1" ] && return 0; done
-  return 1
+  ([ "$#" -lt 2 ] || [ -z "$1" ] || [ -z "$2" ]) && return 1
+  if echo "$2" | $GREP -q "$1"; then
+    return 0;
+  else
+    return 1
+  fi
 }
 
 function sort_array {
-  local arr
-  arr=($(for e in $*; do echo "${e}${output_valueseparator}"; done | sort))
-  echo "${arr[@]}"
+  typeset e
+  sorted=$(for e in $*; do echo "${e}${output_valueseparator}"; done | sort)
+  echo $sorted
 }
 
 function check_return_code {
-  local command="$1"
-  local ret="$2"
-  local output="$3"
+  typeset command="$1"
+  typeset ret="$2"
+  typeset output="$3"
   if [ $ret -ne 0 ]; then
     echoerr "ERROR executing $command"
     [ $TRACE ] && echoerr "TRACE output: "$output" return: $ret"
@@ -101,28 +104,22 @@ function echoerr {
 }
 
 function set_newest_java {
-  local command="$1"
-  local newver="$2"
-  local oldver
-  local oldcmd
-  local tmp
+  typeset command="$1"
+  typeset newver="$2"
 
   if [ -f $java_tmpfile ]; then
-    oldver=$($AWK '{ print $1 }' $java_tmpfile)
-    oldcmd=$($AWK '{ print $2 }' $java_tmpfile)
+    typeset oldver=$($AWK '{ print $1 }' $java_tmpfile)
+    typeset oldcmd=$($AWK '{ print $2 }' $java_tmpfile)
   fi
-  tmp=$(echo -e "${oldver}\n${newver}" | sort -r | head -n 1)
+  typeset tmp=$(echo -e "${oldver}\n${newver}" | sort -r | head -n 1)
   [ "$tmp" != "$oldver" ] && echo "$tmp" "$command" > $java_tmpfile
   return 0
 }
 
 function get_newest_java {
-  local ver
-  local cmd
-
   if [ -f $java_tmpfile ]; then
-    ver=$($AWK '{ print $1 }' $java_tmpfile)
-    cmd=$($AWK '{ print $2 }' $java_tmpfile)
+    typeset ver=$($AWK '{ print $1 }' $java_tmpfile)
+    typeset cmd=$($AWK '{ print $2 }' $java_tmpfile)
     echo $cmd
   fi
   return 0
@@ -140,14 +137,11 @@ function is_inprocfilter {
 
 
 function check_versions {
-  local process=$1
-  local input=$2
-  local pid
-  local command
-  local output=""
+  typeset process=$1
+  typeset input=$2
 
-  pid=$(echo $input | $AWK -F"@" '{ print $1 }')
-  command=$(echo $input | $AWK -F"@" '{ print $2 }')
+  typeset pid=$(echo $input | $AWK -F"@" '{ print $1 }')
+  typeset command=$(echo $input | $AWK -F"@" '{ print $2 }')
   if is_inprocfilter "$command"; then
      [ ${DEBUG} ] && echoerr "INFO skipping $command"
      return 1
@@ -155,14 +149,16 @@ function check_versions {
 
   case $process in
     apache|httpd)
-      local ap_ld_path=$(dirname $command)/../lib
+      typeset ap_ld_path=$(dirname $command)/../lib
       [ -x $command ] && output=$(LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH ${command} -v 2>&1 | cut -d " " -f 3 | $SED 's|Apache/||' ; exit ${PIPESTATUS[0]})
       check_return_code "$command" "$?" "$output"
       ;;
     java)
       if [ -x $command ]; then
-        output=$(${command} -version 2>&1 | head -1 | cut -d " " -f 3- | tr -d \"; exit ${PIPESTATUS[0]})
-        if ! check_return_code "$command" "$?" "$output"; then return 1; fi
+        typeset output=$(${command} -version 2>&1 | head -1 | cut -d " " -f 3- | tr -d \"; exit ${PIPESTATUS[0]})
+        typeset ret=$?
+        if ! check_return_code "$command" "$ret" "$output"; then return 1; fi
+        echo "$output" | $GREP -Eq "[0-9\.]{3}_" || return 1
         set_newest_java "$command" "$output"
       else
         set_procfilter "$command"
@@ -171,26 +167,25 @@ function check_versions {
       fi
       ;;
     tomcat)
-      local java_home="$(dirname $command)/.."
-      local jps="${java_home}/bin/jps"
+      typeset java_home="$(dirname $command)/.."
+      typeset jps="${java_home}/bin/jps"
       if [ ! -x "$jps" ]; then
         jps="$(dirname $(get_newest_java))/jps)"
-        [ -x "$jps" ] && local catalina_home=$(${jps} -lv | $GREP $pid | $SED 's/^.*-Dcatalina.home=\(.*\) .*$/\1/g')
+        [ -x "$jps" ] && typeset catalina_home=$(${jps} -lv | $GREP $pid | $SED 's/^.*-Dcatalina.home=\(.*\) .*$/\1/g')
       fi
       [ $TRACE ] && echoerr "TRACE catalina_home1: ${catalina_home}"
-      [ ! -d "${catalina_home}" ] && catalina_home=$($PS | $GREP $pid | $SED 's/^.*-Dcatalina.home=\(.*\) -.*/\1/g')
+      [ ! -d "${catalina_home}" ] && typeset catalina_home=$($PS | $GREP $pid | $SED 's/^.*-Dcatalina.home=\(.*\) -.*/\1/g')
       [ $TRACE ] && echoerr "TRACE catalina_home2: ${catalina_home}"
       if [ ! -d "${catalina_home}" ]; then
         [ $DEBUG ] && echoerr "INFO failed to detect CATALINA_HOME - trying classpath..."
-        local classpath=$($PS | $GREP $pid | $SED 's/^.*-classpath \(.*\) .*$/\1/g')
-        declare -a cparr=($(echo "$classpath" | $SED 's/:/ /g'))
-        [ $TRACE ] && echoerr "TRACE classpath: $(echo ${cparr[@]} | sort -u)"
-        for p in ${cparr[@]}; do
+        typeset classpath=$($PS | $GREP $pid | $SED -e 's/^.*-classpath \(.*\) .*$/\1/g' -e 's/:/ /g')
+        [ $TRACE ] && echoerr "TRACE classpath: $classpath"
+        for p in ${classpath}; do
           if $(echo "$p" | $GREP -v Main | $GREP -qi tomcat) ; then
-            local tctmp=$p
+            typeset tctmp=$p
             if [ -d $tctmp ] || [ -f $tctmp ]; then
-              local catalina_home_t=$(echo $(dirname $tctmp) | $SED -e 's/bin//g' -e 's/lib//g' | sort -u)
-              [ -f ${catalina_home_t}/bin/catalina.sh ] && catalina_home="$catalina_home_t"
+              typeset catalina_home_t=$(echo $(dirname $tctmp) | $SED -e 's/bin//g' -e 's/lib//g' | sort -u)
+              [ -f ${catalina_home_t}/bin/catalina.sh ] && typeset catalina_home="$catalina_home_t"
               [ $TRACE ] && echoerr "TRACE catalina_home3: ${catalina_home}"
             fi
           fi
@@ -201,30 +196,29 @@ function check_versions {
         [ $TRACE ] && echoerr "TRACE catalina_home_final: ${catalina_home}"
         return 1
       fi
-      local tomcat_command="CATALINA_HOME=${catalina_home} JAVA_HOME=${java_home} sh ${catalina_home}/bin/catalina.sh version"
+      typeset tomcat_command="CATALINA_HOME=${catalina_home} JAVA_HOME=${java_home} sh ${catalina_home}/bin/catalina.sh version"
       [ $TRACE ] && echoerr "TRACE tomcat_command: $tomcat_command"
-      output=$(eval ${tomcat_command} | $GREP -iE "version.*tomcat" | sed 's/.*\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/' ; exit ${PIPESTATUS[0]})
+      typeset output=$(eval ${tomcat_command} | $GREP -iE "version.*tomcat" | sed 's/.*\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/' ; exit ${PIPESTATUS[0]})
       if ! check_return_code "$tomcat_command" "$?" "$output"; then
-        tomcat_command="JAVA_HOME=${java_home} sh ${catalina_home}/bin/catalina.sh"
-        output=$(eval ${tomcat_command} 2>&1 | grep CATALINA_HOME | sed 's/.*-\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/'; exit ${PIPESTATUS[1]})
+        typeset tomcat_command="JAVA_HOME=${java_home} sh ${catalina_home}/bin/catalina.sh"
+        typeset output=$(eval ${tomcat_command} 2>&1 | grep CATALINA_HOME | sed 's/.*-\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/'; exit ${PIPESTATUS[1]})
       fi
       if ! check_return_code "$tomcat_command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
       ;;
     jboss)
-      local java_home="$(dirname $command)/.."
-      local jinfo="${java_home}/bin/jinfo"
+      typeset java_home="$(dirname $command)/.."
+      typeset jinfo="${java_home}/bin/jinfo"
       [ -x ${jinfo} ] || jinfo="$(dirname $(get_newest_java))/jinfo"
-      local jboss_home=$(${jinfo} $pid 2>&1 | $GREP jboss.home.dir | cut -d " " -f 3)
+      typeset jboss_home=$(${jinfo} $pid 2>&1 | $GREP jboss.home.dir | cut -d " " -f 3)
       if [ -z "${jboss_home}" ]; then
         [ $DEBUG ] && echoerr "INFO failed to detect JBOSS_HOME - trying classpath..."
-        local classpath=$($PS | $GREP $pid | $SED 's/^.*-classpath \(.*\) .*$/\1/g')
-        declare -a cparr=($(echo "$classpath" | $SED 's/:/ /g'))
-        [ $TRACE ] && echoerr "TRACE classpath: $(echo ${cparr[@]} | sort -u)"
-        for p in ${cparr[@]}; do
+        typeset classpath=$($PS | $GREP $pid | $SED -e 's/^.*-classpath \(.*\) .*$/\1/g' -e 's/:/ /g')
+        [ $TRACE ] && echoerr "TRACE classpath: ${classpath} | sort -u)"
+        for p in ${classpath}; do
           if $(echo "$p" | $GREP -v Main | $GREP -qi jboss) ; then
-            local jbtmp=$p
+            typeset jbtmp=$p
             if [ -d $jbtmp ] || [ -f $jbtmp ]; then
-              jboss_home=$(echo $(dirname $jbtmp) | $SED -e 's/bin//g' -e 's/lib//g' | sort -u)
+              typeset jboss_home=$(echo $(dirname $jbtmp) | $SED -e 's/bin//g' -e 's/lib//g' | sort -u)
               [ -f ${jboss_home}/bin/run.sh ] && break
             fi
           fi
@@ -235,25 +229,25 @@ function check_versions {
         [ $TRACE ] && echoerr "TRACE jboss_home: ${jboss_home}"
         return 1
       fi
-      local jboss_command="JBOSS_HOME=${jboss_home} JAVA_HOME=${java_home} sh ${jboss_home}/bin/run.sh -V"
-      output=$(eval ${jboss_command} | $GREP -i "build" | $SED -e 's/[jJ][bB][oO][sS][sS]//' -e 's/(.*)//'; exit ${PIPESTATUS[0]})
+      typeset jboss_command="JBOSS_HOME=${jboss_home} JAVA_HOME=${java_home} sh ${jboss_home}/bin/run.sh -V"
+      typeset output=$(eval ${jboss_command} | $GREP -i "build" | $SED -e 's/[jJ][bB][oO][sS][sS]//' -e 's/(.*)//'; exit ${PIPESTATUS[0]})
       if ! check_return_code "$jboss_command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
       ;;
     websphere)
-      local ws_home=$(echo $command | $SED 's|\(.*AppServer\).*$|\1/bin|')
-      output=$(${ws_home}/versionInfo.sh | $GREP -v Directory | $AWK '/^Version/ { if (length($2)>=4) print $2 }')
+      typeset ws_home=$(echo $command | $SED 's|\(.*AppServer\).*$|\1/bin|')
+      typeset output=$(${ws_home}/versionInfo.sh | $GREP -v Directory | $AWK '/^Version/ { if (length($2)>=4) print $2 }')
       if ! check_return_code "${ws_home}/versionInfo.sh" "$?" "$output"; then set_procfilter "$command"; return 1; fi
       ;;
     python)
-      output=$($command -V 2>&1 | $AWK '{ print $2 }')
+      typeset output=$($command -V 2>&1 | $AWK '{ print $2 }')
       if ! check_return_code "$command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
       ;;
     perl)
-      output=$($command -v | $GREP "This is perl" | $SED 's/.*v\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/')
+      typeset output=$($command -v | $GREP "This is perl" | $SED 's/.*v\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/')
       if ! check_return_code "$command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
       ;;
     php)
-      output=$($command -v | head -n 1 | sed 's/^PHP \([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/')
+      typeset output=$($command -v | head -n 1 | sed 's/^PHP \([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/')
       if ! check_return_code "$command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
       ;;
     *)
@@ -268,79 +262,76 @@ function check_versions {
 }
 
 function search_processes {
-  local output
-  local net
-  local p
-  local t
-  local r
-  local f='grep|/bash'
-  declare -a duplicates_proc
-  declare -a duplicates_net
-  declare -a cvs_out=("${HOSTNAME}")
+  typeset f='grep|/bash'
+  typeset duplicates_proc
+  typeset duplicates_net
+  typeset cvs_out="${HOSTNAME}"
+  typeset r
+  typeset t
+  typeset p
 
+  echo '#---- checking versions --------------#'
   [ ${SHOW_PROCS} ] && echo '#---- checking running processes ----#'
   for p in $searchprocs ; do
     [ "$p" == "apache" ] && ef='|org.apache'
     [ "$p" == "jboss" ] && ef='|jbossall-client'
     [ "$p" == "websphere" ] && ef='|InformationServer'
-    t=$($PS | $GREP -i "${p}" | $GREP -vE "${f}${ef}" | $AWK '{ print $1"@"$5 }')
-    [ ${SHOW_PROCS} ] && echo "${p}: $t"
-    declare result_$p="$t"
+    typeset t=$($PS | $GREP -i "${p}" | $GREP -vE "${f}${ef}" | $AWK '{ print $1"@"$5 }')
+    [ ${SHOW_PROCS} ] && echo "PROCESSES ${p}: $t"
     unset ef
-  done
 
-  echo '#---- checking versions --------------#'
-  for p in $searchprocs ; do
-    output=()
-    net=()
-    v=result_$p
-    res=${!v}
 
-    for r in ${res} ; do
-      local c="${r/*@/}"
-      local pid="${r/@*/}"
-      if ([ "$p" = "apache" ] || [ "$p" = "httpd" ] || [ "$p" = "java" ] ) && is_inarray "${c}" "${duplicates_proc[@]}"; then : ; else
-        duplicates_proc=("${duplicates_proc[@]}" "${c}")
+    for r in ${t} ; do
+      typeset pid=$(echo $r | $AWK -F"@" '{ print $1 }')
+      typeset c=$(echo $r | $AWK -F"@" '{ print $2 }')
+      if ([ "$p" = "apache" ] || [ "$p" = "httpd" ] || [ "$p" = "java" ] ) && is_inarray "${c}" "${duplicates_proc}"; then : ; else
+        duplicates_proc="${duplicates_proc} ${c}"
         [ ${DEBUG} ] && echoerr "PROCCHECK: $p $r"
-        local t="$(check_versions $p $r)"
-        if ! is_inarray "$t" "${output[@]}"; then
-          output=("${output[@]}" "${t}")
+        t="$(check_versions $p $r)"
+        if ! is_inarray "$t" "${output}"; then
+          typeset output=""${output}" "${t}""
         fi
       fi
-      if [ "$p" = "java" ] || is_inarray "${pid}" "${duplicates_net[@]}"; then : ; else
-        duplicates_net=("${duplicates_net[@]}" "${pid}")
+      if [ "$p" = "java" ] || is_inarray "${pid}" "${duplicates_net}"; then : ; else
+        duplicates_net=""${duplicates_net}" "${pid}""
         [ ${DEBUG} ] && echoerr "NETCHECK: $p $pid"
-        local n="$(get_proc_tcpports $pid)"
-        if ! is_inarray "$n" "${net[@]}"; then
-          net=("${net[@]}" "${n}")
+        typeset n="$(get_proc_tcpports $pid)"
+        if ! is_inarray "$n" "${net}"; then
+          typeset net=""${net}" "${n}""
         fi
       fi
+      unset pid c
     done
+    unset r t n
 
-    if [ $CVS_OUTPUT ]; then
-      local cvs="$(sort_array "${output[@]}")${output_fieldseparator}$(sort_array "${net[@]}")"
-      local cvs_header="${cvs_header}${p}_version;${p}_IPs;"
-      cvs_out=("${cvs_out[@]}" ${output_fieldseparator} "${cvs}")
+    if [ $CSV_OUTPUT ]; then
+      typeset cvs="$(sort_array "${output}")${output_fieldseparator}$(sort_array "${net}")"
+      typeset cvs_header="${cvs_header}${p}_version;${p}_IPs;"
+      typeset cvs_out="${cvs_out}${output_fieldseparator}${cvs}"
     else
-      echo "${p}${output_fieldseparator} $(sort_array "${output[@]}")${output_fieldseparator} $(sort_array "${net[@]}")"
+      echo "${p}${output_fieldseparator}$(sort_array "${output}")${output_fieldseparator}$(sort_array "${net}")" | $SED 's/[()]//g'
     fi
-    unset output subres r t p
+    unset output net subres r t p
   done
-  [ $CVS_OUTPUT ] && echo "hostname;${cvs_header}" && echo "${cvs_out[@]}"
+  [ $CSV_OUTPUT ] && echo "hostname;${cvs_header}" && echo "${cvs_out}" | $SED 's/[()]//g'
   echo '#------------------------------------#'
+  unset p
 }
 
 function get_proc_tcpports {
-  local pid=$1
+  typeset pid="$1"
+  typeset ret
+  typeset ips
 
-  case $OS in
+  case "$OS" in
   solaris)
-    local ips=$($PFILES $pid 2>/dev/null | $AWK '/sockname: AF_INET/ {x=$3;y=$5; getline; if($0 !~ /peername/ )  print x":"y }' | sort -u | $SED 's/0.0.0.0:0//g' | tr '\n' ' '; exit ${PIPESTATUS[0]})
-    local ret=$?
+    ips=$($PFILES $pid 2>/dev/null | $AWK '/sockname: AF_INET/ {x=$3;y=$5; getline; if($0 !~ /peername/ )  print x":"y }' | sort -u | $SED 's/0.0.0.0:0//g' | tr '\n' ' '; exit ${PIPESTATUS[0]})
+    ret=$?
+    echo "$ips" | $GREP -Eq "([0-9]{1,3}\.){3}[0-9]{1,3}" || ret=1
     ;;
   linux)
-    local ips=$(netstat -anltp 2>/dev/null | $AWK "/LISTEN.*$pid/ {print \$4}"; exit ${PIPESTATUS[0]})
-    local ret=$?
+    ips=$(netstat -anltp 2>/dev/null | $AWK "/LISTEN.*$pid/ {print \$4}"; exit ${PIPESTATUS[0]})
+    ret=$?
     ;;
   *)
     echoerr "ERROR get_proc_tcpports: unknown OS"
@@ -354,12 +345,10 @@ function get_proc_tcpports {
   else
     echoerr "ERROR checking listen IPs for pid: $pid return code: $?"
   fi
+  unset pid ret ips
 }
 
 function search_packages {
-  local res
-  local pkg
-  
   echo '#---- checking packages ---------------#'
   if [ -z "$pkgmanager" ]; then
    echo "ERROR: unknown package manager, skipping package checks"
@@ -368,16 +357,14 @@ function search_packages {
 
   for pkg in $searchpkgs ; do
     echo -n "${pkg}: "
-    res=$($pkgmanager | $GREP $pkg)
+    typeset res=$($pkgmanager | $GREP $pkg)
     echo $res
   done
 }
 
 function search_filesystem {
-  local name
-  local res
-  local num=1
-  local findstring="find"
+  typeset num=1
+  typeset findstring="find"
 
   for dir in $searchdirs ; do
     [ -d $dir ] && findstring="${findstring} ${dir}"
@@ -401,6 +388,7 @@ function search_filesystem {
 [ ${TRACE} ] && DEBUG=true
 [ ${DEBUG} ] && SHOW_PROCS=true
 
+#set -o pipefail # ksh93 only :/
 trap exit_handler 1 2 6 15
 
 get_env
