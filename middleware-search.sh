@@ -254,8 +254,9 @@ function search_processes {
   typeset duplicates_proc
   typeset duplicates_net
   typeset cvs_out="${HOSTNAME}"
-  typeset output
-  typeset net
+  typeset r
+  typeset t
+  typeset p
 
   echo '#---- checking versions --------------#'
   [ ${SHOW_PROCS} ] && echo '#---- checking running processes ----#'
@@ -263,52 +264,58 @@ function search_processes {
     [ "$p" == "apache" ] && ef='|org.apache'
     [ "$p" == "jboss" ] && ef='|jbossall-client'
     [ "$p" == "websphere" ] && ef='|InformationServer'
-    t=$($PS | $GREP -i "${p}" | $GREP -vE "${f}${ef}" | $AWK '{ print $1"@"$5 }')
+    typeset t=$($PS | $GREP -i "${p}" | $GREP -vE "${f}${ef}" | $AWK '{ print $1"@"$5 }')
     [ ${SHOW_PROCS} ] && echo "PROCESSES ${p}: $t"
     unset ef
 
 
     for r in ${t} ; do
-      c="${r/*@/}"
-      pid="${r/@*/}"
+      typeset pid=$(echo $r | $AWK -F"@" '{ print $1 }')
+      typeset c=$(echo $r | $AWK -F"@" '{ print $2 }')
       if ([ "$p" = "apache" ] || [ "$p" = "httpd" ] || [ "$p" = "java" ] ) && is_inarray "${c}" "${duplicates_proc}"; then : ; else
         duplicates_proc="${duplicates_proc} ${c}"
         [ ${DEBUG} ] && echoerr "PROCCHECK: $p $r"
         t="$(check_versions $p $r)"
         if ! is_inarray "$t" "${output}"; then
-          output=""${output}" "${t}""
+          typeset output=""${output}" "${t}""
         fi
       fi
       if [ "$p" = "java" ] || is_inarray "${pid}" "${duplicates_net}"; then : ; else
         duplicates_net=""${duplicates_net}" "${pid}""
         [ ${DEBUG} ] && echoerr "NETCHECK: $p $pid"
-        n="$(get_proc_tcpports $pid)"
+        typeset n="$(get_proc_tcpports $pid)"
         if ! is_inarray "$n" "${net}"; then
-          net=""${net}" "${n}""
+          typeset net=""${net}" "${n}""
         fi
       fi
+      unset pid c
     done
+    unset r t n
 
     if [ $CSV_OUTPUT ]; then
-      cvs="$(sort_array "${output}")${output_fieldseparator}$(sort_array "${net}")"
-      cvs_header="${cvs_header}${p}_version;${p}_IPs;"
-      cvs_out=""${cvs_out}" ${output_fieldseparator} "${cvs}""
+      typeset cvs="$(sort_array "${output}")${output_fieldseparator}$(sort_array "${net}")"
+      typeset cvs_header="${cvs_header}${p}_version;${p}_IPs;"
+      typeset cvs_out="${cvs_out}${output_fieldseparator}${cvs}"
     else
       echo "${p}${output_fieldseparator}$(sort_array "${output}")${output_fieldseparator}$(sort_array "${net}")" | $SED 's/[()]//g'
     fi
-    unset output subres r t p
+    unset output net subres r t p
   done
   [ $CSV_OUTPUT ] && echo "hostname;${cvs_header}" && echo "${cvs_out}" | $SED 's/[()]//g'
   echo '#------------------------------------#'
+  unset p
 }
 
 function get_proc_tcpports {
-  pid=$1
+  typeset pid="$1"
+  typeset ret
+  typeset ips
 
-  case $OS in
+  case "$OS" in
   solaris)
     ips=$($PFILES $pid 2>/dev/null | $AWK '/sockname: AF_INET/ {x=$3;y=$5; getline; if($0 !~ /peername/ )  print x":"y }' | sort -u | $SED 's/0.0.0.0:0//g' | tr '\n' ' '; exit ${PIPESTATUS[0]})
     ret=$?
+    echo "$ips" | $GREP -Eq "([0-9]{1,3}\.){3}[0-9]{1,3}" || ret=1
     ;;
   linux)
     ips=$(netstat -anltp 2>/dev/null | $AWK "/LISTEN.*$pid/ {print \$4}"; exit ${PIPESTATUS[0]})
@@ -326,6 +333,7 @@ function get_proc_tcpports {
   else
     echoerr "ERROR checking listen IPs for pid: $pid return code: $?"
   fi
+  unset pid ret ips
 }
 
 function search_packages {
@@ -365,7 +373,7 @@ function search_filesystem {
 ###
 # Main
 ###
-set -o pipefail # ksh93 only :/
+#set -o pipefail # ksh93 only :/
 trap exit_handler 1 2 6 15
 
 get_env
