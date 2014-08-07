@@ -1,3 +1,18 @@
+#####################################################################
+#                                                                   #
+# middlewaresearch.sh                    Wolfgang Schupp 2014       #
+#                                                                   #
+# collects information for common middleware software running       #
+# on linux, solaris, aix                                            #
+#                                                                   #
+# Note: this script does not specify a shebang on purpose.          #
+# Its designed to run on the default shells found on the supported  #
+# OSs, specifically bash >= v2 and ksh >= 88                        #
+#                                                                   #
+#####################################################################
+
+#----------------------- CONFIG ------------------------------------#
+
 searchprocs="apache httpd java tomcat jboss websphere python perl php"
 searchpkgs="apache apache2 java tomcat jboss python perl php"
 searchdirs="/opt /etc /export"
@@ -5,6 +20,8 @@ fskeywords="[aA]pache java [tT]omcat [jJ][bB]oss"
 procfilter="bash sh LLAWP javasrv"
 output_fieldseparator=';'
 output_valueseparator=' '
+java_tmpfile="/tmp/${$}.java"
+proc_filter_file="/tmp/${$}.filter"
 
 
 PS=${PS:-"ps ax"}
@@ -13,14 +30,9 @@ AWK=${AWK:-"awk"}
 SED=${SED:-"sed"}
 HOST=${HOST:-"host"}
 
-# global vars
-[ ${TRACE} ] && DEBUG=true
-[ ${DEBUG} ] && SHOW_PROCS=true
 
-java_tmpfile="/tmp/${$}.java"
-proc_filter_file="/tmp/${$}.filter"
-#--------------#
 
+#------------------------- FUNCTIONS -------------------------------#
 function exit_handler {
   echo "$(basename $0): User aborted, cleaning up"
   rm -f $java_tmpfile $proc_filter_file
@@ -386,6 +398,9 @@ function search_filesystem {
 ###
 # Main
 ###
+[ ${TRACE} ] && DEBUG=true
+[ ${DEBUG} ] && SHOW_PROCS=true
+
 trap exit_handler 1 2 6 15
 
 get_env
