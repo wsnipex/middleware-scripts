@@ -198,10 +198,10 @@ function check_versions {
       fi
       typeset tomcat_command="CATALINA_HOME=${catalina_home} JAVA_HOME=${java_home} sh ${catalina_home}/bin/catalina.sh version"
       [ $TRACE ] && echoerr "TRACE tomcat_command: $tomcat_command"
-      typeset output=$(eval ${tomcat_command} | $GREP -iE "version.*tomcat" | sed 's/.*\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/' ; exit ${PIPESTATUS[0]})
-      if ! check_return_code "$tomcat_command" "$?" "$output"; then
+      typeset output=$(eval ${tomcat_command} | $GREP -iE "version.*tomcat" | $SED 's/.*\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/' ; exit ${PIPESTATUS[0]})
+      if ! check_return_code "$tomcat_command" "$?" "$output" || [ -z "$output" ]; then
         typeset tomcat_command="JAVA_HOME=${java_home} sh ${catalina_home}/bin/catalina.sh"
-        typeset output=$(eval ${tomcat_command} 2>&1 | grep CATALINA_HOME | sed 's/.*-\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/'; exit ${PIPESTATUS[1]})
+        typeset output=$(eval ${tomcat_command} 2>&1 | $GREP CATALINA_HOME | $SED 's/.*-\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/'; exit ${PIPESTATUS[1]})
       fi
       if ! check_return_code "$tomcat_command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
       ;;
