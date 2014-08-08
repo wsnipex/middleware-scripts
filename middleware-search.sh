@@ -22,6 +22,7 @@ output_fieldseparator=';'
 output_valueseparator=' '
 java_tmpfile="/tmp/${$}.java"
 proc_filter_file="/tmp/${$}.filter"
+ssh_opts="-o BatchMode=yes -o ConnectTimeout=5 -o ForwardX11=no"
 
 
 PS=${PS:-"ps ax"}
@@ -35,11 +36,15 @@ HOST=${HOST:-"host"}
 #------------------------- FUNCTIONS -------------------------------#
 function usage {
   echo "usage $(basename $0)
-  [-h | --help]  ... this help
-  [-p | --procs] ... show processes in output        [default no]
-  [-d | --debug] ... enable debug output, implies -p [default no]
-  [-t | --trace] ... enable trace output, implies -d [default no]
-  [-c | --csv]   ... enable CSV output               [default no]
+  [-h | --help]               ... this help
+  [-p | --procs]              ... show processes in output        [default no]
+  [-d | --debug]              ... enable debug output, implies -p [default no]
+  [-t | --trace]              ... enable trace output, implies -d [default no]
+  [-c | --csv]                ... enable CSV output               [default no]
+  [-r | --remote] [user@]host ... enable remote execution via ssh [default no]
+  [-f | --file]   filename    ... read [user@]remotehost from file.
+                                  format: 1 line per host
+                                  implies -r
   "
 }
 
@@ -391,10 +396,34 @@ function search_filesystem {
   eval ${findstring} 2>/dev/null
 }
 
+function ssh_exec {
+  typeset rhost="$1"
+
+  [ $DEBUG ] && echoerr "checking remote shell"
+  typeset rshell=$(ssh $rhost -C "command -v bash")
+  [ $? -eq 0 ] || typeset rshell=$(ssh $rhost -C "command -v ksh")
+  if [ -z "$rshell" ]; then
+    echoerr "ERROR could not determine remote shell for host $rhost, skipping"
+  else
+    [ $DEBUG ] && echoerr "remote shell: $rshell"
+    ssh $rhost "cat | $rshell /dev/stdin" "$REMOTE_OPTS" < "$MYSELF"
+  fi
+}
+
+function read_remotefile {
+  typeset remotehost
+  cat $RHFILE | $SED '/^#/d' | while read remotehost ; do
+    [ -z "$remotehost" ] && continue
+    ssh_exec "$remotehost"
+  done
+  exit 0
+}
 
 ###
 # Main
 ###
+MYSELF=$0
+
 # get options
 while :; do
   case $1 in
@@ -404,29 +433,47 @@ while :; do
       ;;
     -p | --procs)
       SHOW_PROCS=true
+      REMOTE_OPTS="$REMOTE_OPTS -p"
       shift
       ;;
     -d | --debug)
       SHOW_PROCS=true
       DEBUG=true
+      REMOTE_OPTS="$REMOTE_OPTS -d"
       shift
       ;;
     -t | --trace)
       SHOW_PROCS=true
       DEBUG=true
       TRACE=true
+      REMOTE_OPTS="$REMOTE_OPTS -t"
       shift
       ;;
     -c | --csv)
       CSV_OUTPUT=true
+      REMOTE_OPTS="$REMOTE_OPTS -c"
       shift
+      ;;
+    -r | --remote)
+      RHOST=$2
+      [ -z $RHOST ] && echoerr "no hostname given" && exit 2
+      REMOTE_EXEC=true
+      shift 2
+      ;;
+    -f | --file)
+      RHFILE=$2
+      [ -z "$RHFILE" ] && echoerr "no filename given" && exit 2
+      [ ! -f $RHFILE ] && echoerr "file $RHFILE not found" && exit 2
+      READ_RHFILE=true
+      REMOTE_EXEC=true
+      shift 2
       ;;
     --)
       shift
       break
       ;;
     -*)
-      echo "WARN: Unknown option (ignored): $1" >&2
+      echoerr "WARN: Unknown option (ignored): $1"
       shift
       ;;
     *)
@@ -437,15 +484,22 @@ done
 
 trap exit_handler 1 2 6 15
 
-get_env
-echo "$procfilter" | tr ' ' '\n' > $proc_filter_file
+if [ $REMOTE_EXEC ]; then
+  if [ $READ_RHFILE ]; then
+    read_remotefile
+  else
+    ssh_exec "$RHOST"
+  fi
+else
+  get_env
+  echo "$procfilter" | tr ' ' '\n' > $proc_filter_file
+  echo '#--------------------------------------#'
+  echo "# OS: $OS - hostname: $HOSTNAME #"
 
-echo '#--------------------------------------#'
-echo "# OS: $OS - hostname: $HOSTNAME #"
+  search_processes
+  #search_packages
+  #search_filesystem
 
-search_processes
-#search_packages
-#search_filesystem
-
-# cleanup
-rm -f $java_tmpfile $proc_filter_file
+  # cleanup
+  rm -f $java_tmpfile $proc_filter_file
+fi
