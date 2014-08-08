@@ -45,6 +45,8 @@ function usage {
   [-f | --file]   filename    ... read [user@]remotehost from file.
                                   format: 1 line per host
                                   implies -r
+  [-q | --quiet]              ... no unnecessary output           [default no]
+                                  useful with in combination with -c and -f
   "
 }
 
@@ -280,12 +282,12 @@ function search_processes {
   typeset f='grep|/bash'
   typeset duplicates_proc
   typeset duplicates_net
-  typeset cvs_out="${HOSTNAME}"
+  typeset csv_out
   typeset r
   typeset t
   typeset p
 
-  echo '#---- checking versions --------------#'
+  [ $BE_QUIET ] || echo '#---- checking versions --------------#'
   [ ${SHOW_PROCS} ] && echo '#---- checking running processes ----#'
   for p in $searchprocs ; do
     [ "$p" == "apache" ] && ef='|org.apache'
@@ -320,16 +322,17 @@ function search_processes {
     unset r t n
 
     if [ $CSV_OUTPUT ]; then
-      typeset cvs="$(sort_array "${output}")${output_fieldseparator}$(sort_array "${net}")"
-      typeset cvs_header="${cvs_header}${p}_version;${p}_IPs;"
-      typeset cvs_out="${cvs_out}${output_fieldseparator}${cvs}"
+      typeset csv="$(sort_array "${output}")${output_fieldseparator}$(sort_array "${net}")"
+      typeset csv_header="${csv_header}${p}_version;${p}_IPs;"
+      typeset csv_out="${csv_out}${output_fieldseparator}${csv}"
     else
       echo "${p}${output_fieldseparator}$(sort_array "${output}")${output_fieldseparator}$(sort_array "${net}")" | $SED 's/[()]//g'
     fi
     unset output net subres r t p
   done
-  [ $CSV_OUTPUT ] && echo "hostname;${cvs_header}" && echo "${cvs_out}" | $SED 's/[()]//g'
-  echo '#------------------------------------#'
+  [ $CSV_OUTPUT ] && [ ! $BE_QUIET ] && echo "hostname;${csv_header}"
+  [ $CSV_OUTPUT ] && echo "${HOSTNAME}${csv_out}" | $SED 's/[()]//g'
+  [ $BE_QUIET ] || echo '#------------------------------------#'
   unset p
 }
 
@@ -364,7 +367,7 @@ function get_proc_tcpports {
 }
 
 function search_packages {
-  echo '#---- checking packages ---------------#'
+  [ $BE_QUIET ] || echo '#---- checking packages ---------------#'
   if [ -z "$pkgmanager" ]; then
    echo "ERROR: unknown package manager, skipping package checks"
    return
@@ -391,8 +394,8 @@ function search_filesystem {
     num=$(( $num +1 )) 
   done
 
-  echo '#---- checking filesystem ---------------#'
-  echo "# running: $findstring #"
+  [ $BE_QUIET ] || echo '#---- checking filesystem ---------------#'
+  [ $BE_QUIET ] || echo "# running: $findstring #"
   eval ${findstring} 2>/dev/null
 }
 
@@ -400,13 +403,14 @@ function ssh_exec {
   typeset rhost="$1"
 
   [ $DEBUG ] && echoerr "checking remote shell"
-  typeset rshell=$(ssh $rhost -C "command -v bash")
+  typeset rshell=$(ssh ${ssh_opts} $rhost -C "command -v bash")
   [ $? -eq 0 ] || typeset rshell=$(ssh $rhost -C "command -v ksh")
   if [ -z "$rshell" ]; then
     echoerr "ERROR could not determine remote shell for host $rhost, skipping"
+    return 1
   else
     [ $DEBUG ] && echoerr "remote shell: $rshell"
-    ssh $rhost "cat | $rshell /dev/stdin" "$REMOTE_OPTS" < "$MYSELF"
+    ssh ${ssh_opts} $rhost "cat | $rshell /dev/stdin" "$REMOTE_OPTS" < "$MYSELF"
   fi
 }
 
@@ -430,6 +434,11 @@ while :; do
     -h | --help)
       usage
       exit 0
+      ;;
+    -q | --quiet)
+      BE_QUIET=true
+      REMOTE_OPTS="$REMOTE_OPTS -q"
+      shift
       ;;
     -p | --procs)
       SHOW_PROCS=true
@@ -493,8 +502,8 @@ if [ $REMOTE_EXEC ]; then
 else
   get_env
   echo "$procfilter" | tr ' ' '\n' > $proc_filter_file
-  echo '#--------------------------------------#'
-  echo "# OS: $OS - hostname: $HOSTNAME #"
+  [ $BE_QUIET ] || echo '#--------------------------------------#'
+  [ $BE_QUIET ] || echo "# OS: $OS - hostname: $HOSTNAME #"
 
   search_processes
   #search_packages
