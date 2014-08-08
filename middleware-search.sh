@@ -22,7 +22,7 @@ output_fieldseparator=';'
 output_valueseparator=' '
 java_tmpfile="/tmp/${$}.java"
 proc_filter_file="/tmp/${$}.filter"
-ssh_opts="-o BatchMode=yes -o ConnectTimeout=5 -o ForwardX11=no"
+ssh_opts="-o BatchMode=yes -o ConnectTimeout=5 -o ForwardX11=no -o StrictHostKeyChecking=no"
 
 
 PS=${PS:-"ps ax"}
