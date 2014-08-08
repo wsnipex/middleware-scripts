@@ -33,6 +33,16 @@ HOST=${HOST:-"host"}
 
 
 #------------------------- FUNCTIONS -------------------------------#
+function usage {
+  echo "usage $(basename $0)
+  [-h | --help]  ... this help
+  [-p | --procs] ... show processes in output        [default no]
+  [-d | --debug] ... enable debug output, implies -p [default no]
+  [-t | --trace] ... enable trace output, implies -d [default no]
+  [-c | --csv]   ... enable CSV output               [default no]
+  "
+}
+
 function exit_handler {
   echo "$(basename $0): User aborted, cleaning up"
   rm -f $java_tmpfile $proc_filter_file
@@ -385,10 +395,46 @@ function search_filesystem {
 ###
 # Main
 ###
-[ ${TRACE} ] && DEBUG=true
-[ ${DEBUG} ] && SHOW_PROCS=true
+# get options
+while :; do
+  case $1 in
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    -p | --procs)
+      SHOW_PROCS=true
+      shift
+      ;;
+    -d | --debug)
+      SHOW_PROCS=true
+      DEBUG=true
+      shift
+      ;;
+    -t | --trace)
+      SHOW_PROCS=true
+      DEBUG=true
+      TRACE=true
+      shift
+      ;;
+    -c | --csv)
+      CSV_OUTPUT=true
+      shift
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      echo "WARN: Unknown option (ignored): $1" >&2
+      shift
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
 
-#set -o pipefail # ksh93 only :/
 trap exit_handler 1 2 6 15
 
 get_env
