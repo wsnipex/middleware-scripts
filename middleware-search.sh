@@ -154,6 +154,14 @@ function is_inprocfilter {
   return 1
 }
 
+function get_zone {
+  typeset pid=$1
+  typeset curzone=$(/usr/bin/zonename)
+  typeset zone=$(/usr/bin/ps -efZ | $GREP " $pid " | $GREP -v grep | $AWK '{ print $1 }' | sort -u)
+  [ "$curzone" = "$zone" ] && (echoerr "ERROR: $pid is in the current zone";  return 1)
+  [ "$curzone" = "global" ] && echo "$zone"
+  return 0
+}
 
 function check_versions {
   typeset process=$1
@@ -173,7 +181,7 @@ function check_versions {
         output="$(LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH ${command} -v 2>&1 | $AWK '/Apache/ { print $3 }' | $SED 's|Apache/||' ; exit ${PIPESTATUS[0]})"
         check_return_code "$command" "$?" "$output"
       elif [ $OS = "solaris" ]; then
-        typeset zone=$(/usr/bin/ps -efZ | $GREP " $pid " | $GREP -v grep | $AWK '{ print $1 }' | sort -u)
+        zone=$(get_zone "$pid") || return 1
         output="zone:${zone}:$(/usr/sbin/zlogin $zone LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH ${command} -v 2>&1 | $AWK '/Apache/ { print $3 }' | $SED 's|Apache/||' ; exit ${PIPESTATUS[0]})"
         check_return_code "$command" "$?" "$output"
       else
