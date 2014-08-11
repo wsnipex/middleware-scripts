@@ -163,6 +163,21 @@ function get_zone {
   return 0
 }
 
+function exec_command {
+  typeset command="$1"
+  typeset use_zlogin="$2"
+  typeset out_prefix="$3"
+
+  if [ -n "$use_zlogin" ]; then
+    typeset output="${out_prefix}$(${use_zlogin} ${command})"
+  else
+    typeset output=$(${command})
+  fi
+  typeset ret=$?
+  echo "${output}"
+  return $ret
+}
+
 function check_versions {
   typeset process=$1
   typeset input=$2
@@ -188,11 +203,13 @@ function check_versions {
   case $process in
     apache|httpd)
       typeset ap_ld_path=$(dirname $command)/../lib
-      if [ -n "$use_zlogin" ]; then
-        output="${out_prefix}$(${use_zlogin}LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH ${command} -v 2>&1 | $AWK '/Apache/ { print $3 }' | $SED 's|Apache/||' ; exit ${PIPESTATUS[0]})"
-      else
-        output="$(LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH ${command} -v 2>&1 | $AWK '/Apache/ { print $3 }' | $SED 's|Apache/||' ; exit ${PIPESTATUS[0]})"
-      fi
+#      if [ -n "$use_zlogin" ]; then
+#        output="${out_prefix}$(${use_zlogin}LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH ${command} -v 2>&1 | $AWK '/Apache/ { print $3 }' | $SED 's|Apache/||' ; exit ${PIPESTATUS[0]})"
+#      else
+#        output="$(LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH ${command} -v 2>&1 | $AWK '/Apache/ { print $3 }' | $SED 's|Apache/||' ; exit ${PIPESTATUS[0]})"
+#      fi
+      typeset command="LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH ${command} -v 2>&1 | $AWK '/Apache/ { print $3 }' | $SED 's|Apache/||' ; exit ${PIPESTATUS[0]}"
+      output=$(exec_command "${command}" "${use_zlogin}" "${out_prefix}")
       if ! check_return_code "$command" "$?" "$output"; then return 1; fi
       ;;
     java)
