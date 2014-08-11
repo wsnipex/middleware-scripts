@@ -158,7 +158,7 @@ function get_zone {
   typeset pid=$1
   typeset curzone=$(/usr/bin/zonename)
   typeset zone=$(/usr/bin/ps -efZ | $GREP " $pid " | $GREP -v grep | $AWK '{ print $1 }' | sort -u)
-  [ "$curzone" = "$zone" ] && (echoerr "ERROR: $pid is in the current zone";  return 1)
+  [ "$curzone" = "$zone" ] && ([ $DEBUG ] && echoerr "ERROR: $pid is in the current zone";  return 1)
   [ "$curzone" = "global" ] && echo "$zone"
   return 0
 }
@@ -166,45 +166,51 @@ function get_zone {
 function check_versions {
   typeset process=$1
   typeset input=$2
+  typeset use_zlogin
+  typeset out_prefix
 
   typeset pid=$(echo $input | $AWK -F"@" '{ print $1 }')
   typeset command=$(echo $input | $AWK -F"@" '{ print $2 }')
   if is_inprocfilter "$command"; then
-     [ ${DEBUG} ] && echoerr "INFO skipping $command"
-     return 1
+    [ ${DEBUG} ] && echoerr "INFO skipping $command"
+    return 1
+  fi
+  if [ ! -x "$command" ]; then
+    if [ $OS = "solaris" ] && typeset zone=$(get_zone "$pid"); then
+      use_zlogin="/usr/sbin/zlogin $zone "
+      out_prefix="zone:${zone}:"
+      [ $TRACE ] && echoerr "use_zlogin: $use_zlogin out_prefix: $out_prefix"
+    else
+      echoerr "ERROR $command is not executeable"
+    fi
   fi
 
   case $process in
     apache|httpd)
       typeset ap_ld_path=$(dirname $command)/../lib
-      if [ -x $command ]; then
-        output="$(LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH ${command} -v 2>&1 | $AWK '/Apache/ { print $3 }' | $SED 's|Apache/||' ; exit ${PIPESTATUS[0]})"
-        check_return_code "$command" "$?" "$output"
-      elif [ $OS = "solaris" ]; then
-        zone=$(get_zone "$pid") || return 1
-        output="zone:${zone}:$(/usr/sbin/zlogin $zone LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH ${command} -v 2>&1 | $AWK '/Apache/ { print $3 }' | $SED 's|Apache/||' ; exit ${PIPESTATUS[0]})"
-        check_return_code "$command" "$?" "$output"
+      if [ -n "$use_zlogin" ]; then
+        output="${out_prefix}$(${use_zlogin}LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH ${command} -v 2>&1 | $AWK '/Apache/ { print $3 }' | $SED 's|Apache/||' ; exit ${PIPESTATUS[0]})"
       else
-        [ $DEBUG ] && echoerr "DEBUG $command not executeable"
-        return 1
+        output="$(LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH ${command} -v 2>&1 | $AWK '/Apache/ { print $3 }' | $SED 's|Apache/||' ; exit ${PIPESTATUS[0]})"
       fi
+      if ! check_return_code "$command" "$?" "$output"; then return 1; fi
       ;;
     java)
-      if [ -x $command ]; then
+      if [ -n "$use_zlogin" ]; then
+        typeset output="${out_prefix}$(${use_zlogin} ${command} -version 2>&1 | head -1 | cut -d " " -f 3- | tr -d \"; exit ${PIPESTATUS[0]})"
+        typeset ret=$?
+      else
         typeset output=$(${command} -version 2>&1 | head -1 | cut -d " " -f 3- | tr -d \"; exit ${PIPESTATUS[0]})
         typeset ret=$?
-        if ! check_return_code "$command" "$ret" "$output"; then return 1; fi
-        echo "$output" | $GREP -Eq "[0-9\.]{3}_" || return 1
-        set_newest_java "$command" "$output"
-      else
-        set_procfilter "$command"
-        [ $DEBUG ] && echoerr "DEBUG $command not executeable"
-        return 1
       fi
+      if ! check_return_code "$command" "$ret" "$output"; then set_procfilter "$command"; return 1; fi
+      echo "$output" | $GREP -Eq "[0-9\.]{3}_" || (set_procfilter "$command"; return 1)
+      set_newest_java "$command" "$output"
       ;;
     tomcat)
       typeset java_home="$(dirname $command)/.."
       typeset jps="${java_home}/bin/jps"
+
       if [ ! -x "$jps" ]; then
         jps="$(dirname $(get_newest_java))/jps)"
         [ -x "$jps" ] && typeset catalina_home=$(${jps} -lv | $GREP $pid | $SED 's/^.*-Dcatalina.home=\(.*\) .*$/\1/g')
