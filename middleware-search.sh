@@ -42,9 +42,11 @@ function usage {
   [-t | --trace]              ... enable trace output, implies -d [default no]
   [-c | --csv]                ... enable CSV output               [default no]
   [-r | --remote] [user@]host ... enable remote execution via ssh [default no]
-  [-f | --file]   filename    ... read [user@]remotehost from file.
+  [-f | --file] filename [-n] ... read [user@]remotehost from file.
                                   format: 1 line per host
                                   implies -r
+  [-n | --numthreads]         ... number of threads               [default 1]
+                                  only valid in combination with -f
   [-q | --quiet]              ... no unnecessary output           [default no]
                                   useful with in combination with -c and -f
   "
@@ -416,10 +418,25 @@ function ssh_exec {
 
 function read_remotefile {
   typeset remotehost
-  cat $RHFILE | $SED '/^#/d' | while read remotehost ; do
+  typeset waitpids
+  typeset curjobs
+  typeset remoteuser
+
+  for remotehost in $(cat $RHFILE | $SED '/^#/d'); do
+    [ $(echo $remotehost | $GREP -q "@"; echo $?) -ne 0 ] && remoteuser="root@"
     [ -z "$remotehost" ] && continue
-    ssh_exec "$remotehost"
+    [ $DEBUG ] && echoerr "DEBUG read_remotefile: checking host $remotehost user ${remoteuser%@}"
+    curjobs=$(jobs | wc -l)
+    while [ $MAX_THREADS -ne 1 ] && [ $curjobs -ge $MAX_THREADS ]; do
+      [ $TRACE ] && echoerr "TRACE read_remotefile: job num $curjobs >= max $MAX_THREADS"
+      sleep 5
+      curjobs=$(jobs | wc -l)
+    done
+    ssh_exec "${remoteuser}${remotehost}" &
+    waitpids="$waitpids ${!}"
+    remoteuser=""
   done
+  wait $waitpids
   exit 0
 }
 
@@ -427,6 +444,7 @@ function read_remotefile {
 # Main
 ###
 MYSELF=$0
+MAX_THREADS=1
 
 # get options
 while :; do
@@ -465,16 +483,25 @@ while :; do
       ;;
     -r | --remote)
       RHOST=$2
-      [ -z $RHOST ] && echoerr "no hostname given" && exit 2
+      [ -z $RHOST ] && echoerr "Input ERROR: no hostname given" && exit 2
       REMOTE_EXEC=true
       shift 2
       ;;
     -f | --file)
       RHFILE=$2
-      [ -z "$RHFILE" ] && echoerr "no filename given" && exit 2
-      [ ! -f $RHFILE ] && echoerr "file $RHFILE not found" && exit 2
+      [ -z "$RHFILE" ] && echoerr "Input ERROR: no filename given" && exit 2
+      [ ! -r $RHFILE ] && echoerr "Input ERROR: file $RHFILE not found" && exit 2
       READ_RHFILE=true
       REMOTE_EXEC=true
+      shift 2
+      ;;
+    -n | --numthreads)
+      MAX_THREADS=$2
+      case $MAX_THREADS in
+        ''|*[!0-9]*)
+          echoerr "Input ERROR: $MAX_THREADS is not an integer"
+          exit 2 ;;
+      esac
       shift 2
       ;;
     --)
