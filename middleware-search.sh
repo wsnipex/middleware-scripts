@@ -208,7 +208,7 @@ function check_versions {
 #      else
 #        output="$(LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH ${command} -v 2>&1 | $AWK '/Apache/ { print $3 }' | $SED 's|Apache/||' ; exit ${PIPESTATUS[0]})"
 #      fi
-      typeset command="LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH ${command} -v 2>&1 | $AWK '/Apache/ { print $3 }' | $SED 's|Apache/||' ; exit ${PIPESTATUS[0]}"
+      typeset command="LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH ${command} -v 2>&1 | $AWK '/Apache/ { print \$3 }' | $SED 's|Apache/||' ; exit ${PIPESTATUS[0]}"
       output=$(exec_command "${command}" "${use_zlogin}" "${out_prefix}")
       if ! check_return_code "$command" "$?" "$output"; then return 1; fi
       ;;
