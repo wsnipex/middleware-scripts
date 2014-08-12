@@ -168,12 +168,14 @@ function exec_command {
   typeset use_zlogin="$2"
   typeset out_prefix="$3"
 
+  [ $TRACE ] && echoerr "TRACE exec_command - command: ${command} - use_zlogin: $use_zlogin out_prefix: $out_prefix"
   if [ -n "$use_zlogin" ]; then
-    typeset output="${out_prefix}$(${use_zlogin} ${command})"
+    typeset output="${out_prefix}$(eval "${use_zlogin} ${command}; exit ${PIPESTATUS[0]}")"
   else
-    typeset output=$(${command})
+    typeset output=$(eval "${command}; exit ${PIPESTATUS[0]}")
   fi
   typeset ret=$?
+  [ $TRACE ] && echoerr "TRACE exec_command - output: ${output} - ret: $ret"
   echo "${output}"
   return $ret
 }
@@ -193,8 +195,7 @@ function check_versions {
   if [ ! -x "$command" ]; then
     if [ $OS = "solaris" ] && typeset zone=$(get_zone "$pid"); then
       use_zlogin="/usr/sbin/zlogin $zone "
-      out_prefix="zone:${zone}:"
-      [ $TRACE ] && echoerr "use_zlogin: $use_zlogin out_prefix: $out_prefix"
+      out_prefix="zone_${zone}:"
     else
       echoerr "ERROR $command is not executeable"
     fi
@@ -203,13 +204,8 @@ function check_versions {
   case $process in
     apache|httpd)
       typeset ap_ld_path=$(dirname $command)/../lib
-#      if [ -n "$use_zlogin" ]; then
-#        output="${out_prefix}$(${use_zlogin}LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH ${command} -v 2>&1 | $AWK '/Apache/ { print $3 }' | $SED 's|Apache/||' ; exit ${PIPESTATUS[0]})"
-#      else
-#        output="$(LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH ${command} -v 2>&1 | $AWK '/Apache/ { print $3 }' | $SED 's|Apache/||' ; exit ${PIPESTATUS[0]})"
-#      fi
-      typeset command="LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH ${command} -v 2>&1 | $AWK '/Apache/ { print \$3 }' | $SED 's|Apache/||' ; exit ${PIPESTATUS[0]}"
-      output=$(exec_command "${command}" "${use_zlogin}" "${out_prefix}")
+      typeset cmd="LD_LIBRARY_PATH=${ap_ld_path} ${command} -v 2>&1 | $AWK '/Apache/ { print \$3 }' | $SED 's|Apache/||'"
+      output=$(exec_command "${cmd}" "${use_zlogin}" "${out_prefix}")
       if ! check_return_code "$command" "$?" "$output"; then return 1; fi
       ;;
     java)
