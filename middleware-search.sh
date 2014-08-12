@@ -206,7 +206,7 @@ function check_versions {
       typeset catalina_home=$(get_proc_env "$pid" "CATALINA_HOME")
       [ -z "$catalina_home" ] && catalina_home=$(get_proc_env "$pid" "TOMCAT_HOME")
       if [ ! -d "$catalina_home" ]; then
-        [ $DEBUG ] && echoerr "DEBUG tomcat - catalina_home still not found, trying jps and friends"
+        [ $DEBUG ] && echoerr "DEBUG tomcat - catalina_home not found, trying jps and friends"
         java_home="$(dirname $command)/.."
         typeset jps="${java_home}/bin/jps"
         if [ ! -x "$jps" ]; then
@@ -247,28 +247,33 @@ function check_versions {
       if ! check_return_code "$tomcat_command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
       ;;
     jboss)
-      typeset java_home="$(dirname $command)/.."
-      typeset jinfo="${java_home}/bin/jinfo"
-      [ -x ${jinfo} ] || jinfo="$(dirname $(get_newest_java))/jinfo"
-      typeset jboss_home=$(${jinfo} $pid 2>&1 | $GREP jboss.home.dir | cut -d " " -f 3)
-      if [ -z "${jboss_home}" ]; then
-        [ $DEBUG ] && echoerr "INFO failed to detect JBOSS_HOME - trying classpath..."
-        typeset classpath=$($PS | $GREP $pid | $SED -e 's/^.*-classpath \(.*\) .*$/\1/g' -e 's/:/ /g')
-        [ $TRACE ] && echoerr "TRACE classpath: ${classpath} | sort -u)"
-        for p in ${classpath}; do
-          if $(echo "$p" | $GREP -v Main | $GREP -qi jboss) ; then
-            typeset jbtmp=$p
-            if [ -d $jbtmp ] || [ -f $jbtmp ]; then
-              typeset jboss_home=$(echo $(dirname $jbtmp) | $SED -e 's/bin//g' -e 's/lib//g' | sort -u)
-              [ -f ${jboss_home}/bin/run.sh ] && break
+      typeset java_home=$(get_proc_env "$pid" "JAVA_HOME")
+      typeset jboss_home=$(get_proc_env "$pid" "JBOSS_HOME")
+      if [ ! -d "$jboss_home" ]; then
+        [ $DEBUG ] && echoerr "DEBUG tomcat - jboss_home not found, trying jps and friends"
+        typeset java_home="$(dirname $command)/.."
+        typeset jinfo="${java_home}/bin/jinfo"
+        [ -x ${jinfo} ] || jinfo="$(dirname $(get_newest_java))/jinfo"
+        typeset jboss_home=$(${jinfo} $pid 2>&1 | $GREP jboss.home.dir | cut -d " " -f 3)
+        if [ -z "${jboss_home}" ]; then
+          [ $DEBUG ] && echoerr "INFO failed to detect JBOSS_HOME - trying classpath..."
+          typeset classpath=$($PS | $GREP $pid | $SED -e 's/^.*-classpath \(.*\) .*$/\1/g' -e 's/:/ /g')
+          [ $TRACE ] && echoerr "TRACE classpath: ${classpath} | sort -u)"
+          for p in ${classpath}; do
+            if $(echo "$p" | $GREP -v Main | $GREP -qi jboss) ; then
+              typeset jbtmp=$p
+              if [ -d $jbtmp ] || [ -f $jbtmp ]; then
+                typeset jboss_home=$(echo $(dirname $jbtmp) | $SED -e 's/bin//g' -e 's/lib//g' | sort -u)
+                [ -f ${jboss_home}/bin/run.sh ] && break
+              fi
             fi
-          fi
-        done
-      fi
-      if [ ! -d "${jboss_home}" ]; then
-        echoerr "ERROR failed to detect JBOSS_HOME"
-        [ $TRACE ] && echoerr "TRACE jboss_home: ${jboss_home}"
-        return 1
+          done
+        fi
+        if [ ! -d "${jboss_home}" ]; then
+          echoerr "ERROR failed to detect JBOSS_HOME"
+          [ $TRACE ] && echoerr "TRACE jboss_home: ${jboss_home}"
+          return 1
+        fi
       fi
       typeset jboss_command="JBOSS_HOME=${jboss_home} JAVA_HOME=${java_home} sh ${jboss_home}/bin/run.sh -V"
       typeset output=$(eval ${jboss_command} | $GREP -i "build" | $SED -e 's/[jJ][bB][oO][sS][sS]//' -e 's/(.*)//'; exit ${PIPESTATUS[0]})
