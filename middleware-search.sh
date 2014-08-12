@@ -154,6 +154,20 @@ function is_inprocfilter {
   return 1
 }
 
+function get_proc_env {
+  typeset pid="$1"
+  typeset var="$2"
+
+  if [ "$OS" = "solaris" ]; then
+    typeset pvar=$(pargs -e $pid | $GREP $var | $SED "s/.*${var}=\(.*\)$/\1/"; exit ${PIPESTATUS[0]})
+  elif [ "$OS" = "linux" ]; then
+    typeset pvar=$(tr '\0' '\n' < /proc/$pid/environ | $SED "s/.*${var}=\(.*\)$/\1/"; exit ${PIPESTATUS[0]})
+  fi
+  ret=$?
+  [ $TRACE ] && echoerr "TRACE get_proc_env - pavr: $pvar ret: $ret"
+  echo "${pvar}"
+  return $ret
+}
 
 function check_versions {
   typeset process=$1
@@ -186,34 +200,40 @@ function check_versions {
       fi
       ;;
     tomcat)
-      typeset java_home="$(dirname $command)/.."
-      typeset jps="${java_home}/bin/jps"
-      if [ ! -x "$jps" ]; then
-        jps="$(dirname $(get_newest_java))/jps)"
-        [ -x "$jps" ] && typeset catalina_home=$(${jps} -lv | $GREP $pid | $SED 's/^.*-Dcatalina.home=\(.*\) .*$/\1/g')
-      fi
-      [ $TRACE ] && echoerr "TRACE catalina_home1: ${catalina_home}"
-      [ ! -d "${catalina_home}" ] && typeset catalina_home=$($PS | $GREP $pid | $SED 's/^.*-Dcatalina.home=\(.*\) -.*/\1/g')
-      [ $TRACE ] && echoerr "TRACE catalina_home2: ${catalina_home}"
-      if [ ! -d "${catalina_home}" ]; then
-        [ $DEBUG ] && echoerr "INFO failed to detect CATALINA_HOME - trying classpath..."
-        typeset classpath=$($PS | $GREP $pid | $SED -e 's/^.*-classpath \(.*\) .*$/\1/g' -e 's/:/ /g')
-        [ $TRACE ] && echoerr "TRACE classpath: $classpath"
-        for p in ${classpath}; do
-          if $(echo "$p" | $GREP -v Main | $GREP -qi tomcat) ; then
-            typeset tctmp=$p
-            if [ -d $tctmp ] || [ -f $tctmp ]; then
-              typeset catalina_home_t=$(echo $(dirname $tctmp) | $SED -e 's/bin//g' -e 's/lib//g' | sort -u)
-              [ -f ${catalina_home_t}/bin/catalina.sh ] && typeset catalina_home="$catalina_home_t"
-              [ $TRACE ] && echoerr "TRACE catalina_home3: ${catalina_home}"
+      typeset java_home=$(get_proc_env "$pid" "JAVA_HOME")
+      typeset catalina_home=$(get_proc_env "$pid" "CATALINA_HOME")
+      [ -z "$catalina_home" ] && catalina_home=$(get_proc_env "$pid" "TOMCAT_HOME")
+      if [ ! -d "$catalina_home" ]; then
+        [ $DEBUG ] && echoerr "DEBUG tomcat - catalina_home still not found, trying jps and friends"
+        java_home="$(dirname $command)/.."
+        typeset jps="${java_home}/bin/jps"
+        if [ ! -x "$jps" ]; then
+          jps="$(dirname $(get_newest_java))/jps)"
+          [ -x "$jps" ] && typeset catalina_home=$(${jps} -lv | $GREP $pid | $SED 's/^.*-Dcatalina.home=\(.*\) .*$/\1/g')
+        fi
+        [ $TRACE ] && echoerr "TRACE catalina_home1: ${catalina_home}"
+        [ ! -d "${catalina_home}" ] && typeset catalina_home=$($PS | $GREP $pid | $SED 's/^.*-Dcatalina.home=\(.*\) -.*/\1/g')
+        [ $TRACE ] && echoerr "TRACE catalina_home2: ${catalina_home}"
+        if [ ! -d "${catalina_home}" ]; then
+          [ $DEBUG ] && echoerr "INFO failed to detect CATALINA_HOME - trying classpath..."
+          typeset classpath=$($PS | $GREP $pid | $SED -e 's/^.*-classpath \(.*\) .*$/\1/g' -e 's/:/ /g')
+          [ $TRACE ] && echoerr "TRACE classpath: $classpath"
+          for p in ${classpath}; do
+            if $(echo "$p" | $GREP -v Main | $GREP -qi tomcat) ; then
+              typeset tctmp=$p
+              if [ -d $tctmp ] || [ -f $tctmp ]; then
+                typeset catalina_home_t=$(echo $(dirname $tctmp) | $SED -e 's/bin//g' -e 's/lib//g' | sort -u)
+                [ -f ${catalina_home_t}/bin/catalina.sh ] && typeset catalina_home="$catalina_home_t"
+                [ $TRACE ] && echoerr "TRACE catalina_home3: ${catalina_home}"
+              fi
             fi
-          fi
-        done
-      fi
-      if [ ! -d "${catalina_home}" ]; then
-        echoerr "ERROR failed to detect CATALINA_HOME"
-        [ $TRACE ] && echoerr "TRACE catalina_home_final: ${catalina_home}"
-        return 1
+          done
+        fi
+        if [ ! -d "${catalina_home}" ]; then
+          echoerr "ERROR failed to detect CATALINA_HOME"
+          [ $TRACE ] && echoerr "TRACE catalina_home_final: ${catalina_home}"
+          return 1
+        fi
       fi
       typeset tomcat_command="CATALINA_HOME=${catalina_home} JAVA_HOME=${java_home} sh ${catalina_home}/bin/catalina.sh version"
       [ $TRACE ] && echoerr "TRACE tomcat_command: $tomcat_command"
