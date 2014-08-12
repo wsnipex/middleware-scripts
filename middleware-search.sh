@@ -17,7 +17,7 @@ searchprocs="apache httpd java tomcat jboss websphere python perl php"
 searchpkgs="apache apache2 java tomcat jboss python perl php"
 searchdirs="/opt /etc /export"
 fskeywords="[aA]pache java [tT]omcat [jJ][bB]oss"
-procfilter="bash sh LLAWP javasrv"
+procfilter="bash sh tail LLAWP javasrv"
 output_fieldseparator=';'
 output_valueseparator=' '
 java_tmpfile="/tmp/${$}.java"
@@ -155,11 +155,15 @@ function is_inprocfilter {
 }
 
 function get_zone {
-  typeset pid=$1
+  typeset pid="$1"
+  [ $OS = "solaris" ] || return 1
   typeset curzone=$(/usr/bin/zonename)
-  typeset zone=$(/usr/bin/ps -efZ | $GREP " $pid " | $GREP -v grep | $AWK '{ print $1 }' | sort -u)
-  [ "$curzone" = "$zone" ] && ([ $DEBUG ] && echoerr "ERROR: $pid is in the current zone";  return 1)
-  [ "$curzone" = "global" ] && echo "$zone"
+  typeset zoneinfo="$(/usr/bin/ps -efZ | $GREP " $pid " | $GREP -v grep | $AWK '{ print $2" "$1 }' | sort -u)"
+  if [ "$curzone" = "$(echo $zoneinfo | cut -d ' ' -f2)" ]; then
+    [ $DEBUG ] && echoerr "ERROR: $pid is in the current zone"
+    return 1
+  fi
+  [ "$curzone" = "global" ] && echo "$zoneinfo"
   return 0
 }
 
@@ -183,8 +187,9 @@ function exec_command {
 function check_versions {
   typeset process=$1
   typeset input=$2
-  typeset use_zlogin
-  typeset out_prefix
+  typeset zoneinfo=""
+  typeset use_zlogin=""
+  typeset out_prefix=""
 
   typeset pid=$(echo $input | $AWK -F"@" '{ print $1 }')
   typeset command=$(echo $input | $AWK -F"@" '{ print $2 }')
@@ -192,13 +197,25 @@ function check_versions {
     [ ${DEBUG} ] && echoerr "INFO skipping $command"
     return 1
   fi
-  if [ ! -x "$command" ]; then
-    if [ $OS = "solaris" ] && typeset zone=$(get_zone "$pid"); then
-      use_zlogin="/usr/sbin/zlogin $zone "
+  if zoneinfo=$(get_zone "$pid"); then
+echoerr "USING zlogin for $pid $command"
+      typeset zuser=$(echo $zoneinfo | $AWK '{ print $1 }')
+      typeset zone=$(echo $zoneinfo | $AWK '{ print $2 }')
+      use_zlogin="/usr/sbin/zlogin -l $zuser $zone "
       out_prefix="zone_${zone}:"
-    else
-      echoerr "ERROR $command is not executeable"
-    fi
+  fi
+  if [ "$(echo $command | cut -c1)" != "/" ]; then
+     typeset cmd=$(exec_command "command -v $command" "${use_zlogin}" "") 
+     if [ $? -eq 0 ] && [ -n "$cmd" ]; then
+       command="$cmd"
+     else
+       echoerr "ERROR $cmd not found"
+       unset use_zlogin out_prefix 
+       return 1 
+     fi
+  elif [ "$(echo $command | cut -c1)" = "/" ] && [ ! -x "$command" ]; then
+    echoerr "ERROR $command is not executeable"
+    return 1
   fi
 
   case $process in
