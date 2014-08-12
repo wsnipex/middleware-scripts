@@ -54,6 +54,8 @@ function usage {
 
 function exit_handler {
   echo "$(basename $0): User aborted, cleaning up"
+  CPIDS=$(jobs -p)
+  [ -n "$CPIDS" ] && kill $CPIDS
   rm -f $java_tmpfile $proc_filter_file
   exit 2
 }
@@ -438,7 +440,6 @@ function ssh_exec {
 
 function read_remotefile {
   typeset remotehost
-  typeset waitpids
   typeset curjobs
   typeset remoteuser
 
@@ -452,8 +453,12 @@ function read_remotefile {
       sleep 5
       curjobs=$(jobs | wc -l)
     done
-    ssh_exec "${remoteuser}${remotehost}" &
-    waitpids="$waitpids ${!}"
+    if [ $MAX_THREADS -eq 1 ]; then
+      ssh_exec "${remoteuser}${remotehost}"
+    else
+      ssh_exec "${remoteuser}${remotehost}" &
+      typeset waitpids="$waitpids ${!}"
+    fi
     remoteuser=""
   done
   wait $waitpids
@@ -464,6 +469,7 @@ function read_remotefile {
 # Main
 ###
 MYSELF=$0
+MYPID=$$
 MAX_THREADS=1
 
 # get options
