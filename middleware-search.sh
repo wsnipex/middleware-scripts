@@ -199,13 +199,13 @@ function check_versions {
      [ ${DEBUG} ] && echoerr "INFO skipping $command"
      return 1
   fi
-  if [ ! -x "$command" ]; then
+  if [ ! -f "$command" ]; then
     typeset pcmd="$(get_proc_fullpath "$pid")"
     [ $DEBUG ] && echoerr "DEBUG check_versions - $command full path: $pcmd"
-    if [ -x "$pcmd" ]; then
+    if [ -f "$pcmd" ]; then
       command=$pcmd
     else
-      echoerr "DEBUG check_versions - $command not executeable"
+      echoerr "DEBUG check_versions - $command does not exist"
       set_procfilter "$command"
       return 1
     fi
@@ -234,7 +234,7 @@ function check_versions {
     tomcat)
       typeset java_home=$(get_proc_env "$pid" "JAVA_HOME")
       typeset catalina_home=$(get_proc_env "$pid" "CATALINA_HOME")
-      [ -z "$catalina_home" ] && catalina_home=$(get_proc_env "$pid" "TOMCAT_HOME")
+      [ ! -d "$catalina_home" ] && catalina_home=$(get_proc_env "$pid" "TOMCAT_HOME")
       if [ ! -d "$catalina_home" ]; then
         [ $DEBUG ] && echoerr "DEBUG tomcat - catalina_home not found, trying jps and friends"
         java_home="$(dirname $command)/.."
@@ -267,7 +267,12 @@ function check_versions {
           return 1
         fi
       fi
-      typeset tomcat_command="CATALINA_HOME=${catalina_home} JAVA_HOME=${java_home} sh ${catalina_home}/bin/catalina.sh version"
+      if [ -f "${catalina_home}/bin/catalina.sh" ]; then
+        typeset tomcat_command="CATALINA_HOME=${catalina_home} JAVA_HOME=${java_home} sh ${catalina_home}/bin/catalina.sh version"
+      elif [ $(echo ${catalina_home} | $GREP -Eq "^/usr/share/"; echo $?) -eq 0 ]; then
+        typeset tomcat_tmp=$(echo ${catalina_home} | $SED 's|^/usr/share/||g')
+        [ $(command_exists $tomcat_tmp) -eq 0 ] && typeset tomcat_command="sh ${tomcat_tmp} version"
+      fi
       [ $TRACE ] && echoerr "TRACE tomcat_command: $tomcat_command"
       typeset output=$(eval ${tomcat_command} | $GREP -iE "version.*tomcat" | $SED 's/.*\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/' ; exit ${PIPESTATUS[0]})
       if ! check_return_code "$tomcat_command" "$?" "$output" || [ -z "$output" ]; then
@@ -349,7 +354,7 @@ function search_processes {
   [ $BE_QUIET ] || echo '#---- checking versions --------------#'
   [ ${SHOW_PROCS} ] && echo '#---- checking running processes ----#'
   for p in $searchprocs ; do
-    [ "$p" == "apache" ] && ef='|org.apache'
+    [ "$p" == "apache" ] && ef='|org.apache|java'
     [ "$p" == "tomcat" ] && ef='|astro'
     [ "$p" == "jboss" ] && ef='|jbossall-client|astro'
     [ "$p" == "websphere" ] && ef='|InformationServer'
