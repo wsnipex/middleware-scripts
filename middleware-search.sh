@@ -421,7 +421,7 @@ function get_proc_tcpports {
   if [ $ret -eq 0 ]; then
     echo "$ips"
   else
-    echoerr "ERROR checking listen IPs for pid: $pid return code: $?"
+    [ $DEBUG ] && echoerr "ERROR get_proc_tcpports - checking listen IPs for pid: $pid return code: $?"
   fi
   unset pid ret ips
 }
