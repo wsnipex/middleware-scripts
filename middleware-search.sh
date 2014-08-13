@@ -17,7 +17,7 @@ searchprocs="apache httpd java tomcat jboss websphere python perl php"
 searchpkgs="apache apache2 java tomcat jboss python perl php"
 searchdirs="/opt /etc /export"
 fskeywords="[aA]pache java [tT]omcat [jJ][bB]oss"
-procfilter="bash sh tail LLAWP javasrv"
+procfilter="bash sh tail ssh LLAWP javasrv"
 output_fieldseparator=';'
 output_valueseparator=' '
 java_tmpfile="/tmp/${$}.java"
@@ -163,7 +163,7 @@ function get_proc_env {
   if [ "$OS" = "solaris" ]; then
     typeset pvar=$(pargs -e $pid | $GREP $var | $SED "s/.*${var}=\(.*\)$/\1/"; exit ${PIPESTATUS[0]})
   elif [ "$OS" = "linux" ]; then
-    typeset pvar=$(tr '\0' '\n' < /proc/$pid/environ | $SED "s/.*${var}=\(.*\)$/\1/"; exit ${PIPESTATUS[0]})
+    typeset pvar=$(tr '\0' '\n' < /proc/$pid/environ | $GREP $var | $SED "s/.*${var}=\(.*\)$/\1/"; exit ${PIPESTATUS[0]})
   fi
   ret=$?
   [ $TRACE ] && echoerr "TRACE get_proc_env - pvar: $pvar ret: $ret"
