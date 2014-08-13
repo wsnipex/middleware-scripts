@@ -316,8 +316,10 @@ function check_versions {
       ;;
     websphere)
       typeset ws_home=$(echo $command | $SED 's|\(.*AppServer\).*$|\1/bin|')
-      typeset output=$(${ws_home}/versionInfo.sh | $GREP -v Directory | $AWK '/^Version/ { if (length($2)>=4) print $2 }')
-      if ! check_return_code "${ws_home}/versionInfo.sh" "$?" "$output"; then set_procfilter "$command"; return 1; fi
+      if [ -f ${ws_home}/versionInfo.sh ]; then
+        typeset output=$(${ws_home}/versionInfo.sh | $GREP -v Directory | $AWK '/^Version/ { if (length($2)>=4) print $2 }')
+        if ! check_return_code "${ws_home}/versionInfo.sh" "$?" "$output"; then set_procfilter "$command"; return 1; fi
+      fi
       ;;
     C:D)
       if [ $($GREP -q cduser /etc/passwd; echo $?) -eq 0 ]; then
