@@ -166,9 +166,27 @@ function get_proc_env {
     typeset pvar=$(tr '\0' '\n' < /proc/$pid/environ | $SED "s/.*${var}=\(.*\)$/\1/"; exit ${PIPESTATUS[0]})
   fi
   ret=$?
-  [ $TRACE ] && echoerr "TRACE get_proc_env - pavr: $pvar ret: $ret"
+  [ $TRACE ] && echoerr "TRACE get_proc_env - pvar: $pvar ret: $ret"
   echo "${pvar}"
   return $ret
+}
+
+function get_proc_fullpath {
+  typeset pid="$1"
+
+  if [ "$OS" = "solaris" ]; then
+    typeset pcmd=$(pargs -l $pid | $AWK '{ print $1 }'; exit ${PIPESTATUS[0]})
+  elif [ "$OS" = "linux" ]; then
+    typeset pcmd=$(ls -l /proc/$pid/exe | $AWK '{ print $NF }'; exit ${PIPESTATUS[0]})
+  fi
+  ret=$?
+  [ $TRACE ] && echoerr "TRACE get_proc_fullpath - pcmd: $pcmd ret: $ret"
+  if [ -f "${pcmd}" ] && [ $ret -eq 0 ]; then
+    echo "${pcmd}"
+    return 0
+  fi
+  return $ret
+
 }
 
 function check_versions {
@@ -180,6 +198,18 @@ function check_versions {
   if is_inprocfilter "$command"; then
      [ ${DEBUG} ] && echoerr "INFO skipping $command"
      return 1
+  fi
+  if [ ! -x "$command" ]; then
+    typeset pcmd="$(get_proc_fullpath "$pid")"
+    [ $DEBUG ] && echoerr "DEBUG check_versions - $command full path: $pcmd"
+    if [ -x "$pcmd" ]; then
+      command=$pcmd
+    else
+      echoerr "DEBUG check_versions - $command not executeable"
+      set_procfilter "$command"
+      return 1
+    fi
+    unset pcmd
   fi
 
   case $process in
