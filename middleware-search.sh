@@ -13,7 +13,7 @@
 
 #----------------------- CONFIG ------------------------------------#
 
-searchprocs="apache httpd java tomcat jboss websphere python perl php"
+searchprocs="apache httpd java tomcat jboss websphere C:D python perl php"
 searchpkgs="apache apache2 java tomcat jboss python perl php"
 searchdirs="/opt /etc /export"
 fskeywords="[aA]pache java [tT]omcat [jJ][bB]oss"
@@ -319,6 +319,14 @@ function check_versions {
       typeset output=$(${ws_home}/versionInfo.sh | $GREP -v Directory | $AWK '/^Version/ { if (length($2)>=4) print $2 }')
       if ! check_return_code "${ws_home}/versionInfo.sh" "$?" "$output"; then set_procfilter "$command"; return 1; fi
       ;;
+    C:D)
+      if [ $($GREP -q cduser /etc/passwd; echo $?) -eq 0 ]; then
+        typeset output=$(su - cduser -c 'direct << "EOF quit; EOF"' | $GREP Version | $SED 's/.* Version \([0-9\.]\)/\1/' | cut -d " " -f1)
+        if ! check_return_code "$command" "$?" "$output"; then return 1; fi
+      else
+        echoerr "ERROR - C:D procs running, but cduser not found"
+      fi
+      ;;
     python)
       typeset output=$($command -V 2>&1 | $AWK '{ print $2 }')
       if ! check_return_code "$command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
@@ -350,6 +358,7 @@ function search_processes {
   typeset r
   typeset t
   typeset p
+  typeset e
 
   [ $BE_QUIET ] || echo '#---- checking versions --------------#'
   [ ${SHOW_PROCS} ] && echo '#---- checking running processes ----#'
@@ -358,10 +367,12 @@ function search_processes {
     [ "$p" == "tomcat" ] && ef='|astro'
     [ "$p" == "jboss" ] && ef='|jbossall-client|astro'
     [ "$p" == "websphere" ] && ef='|InformationServer'
-    typeset t=$($PS | $GREP -i "${p}" | $GREP -vE "${f}${ef}" | $AWK '{ print $1"@"$5 }')
-    [ ${SHOW_PROCS} ] && echo "PROCESSES ${p}: $t"
-    unset ef
+    [ "$p" == "C:D" ] && e='|cdpmgr|cdstatm'
 
+    typeset t=$($PS | $GREP -iE "${p}${e}" | $GREP -vE "${f}${ef}" | $AWK '{ print $1"@"$5 }')
+    [ ${SHOW_PROCS} ] && echo "PROCESSES ${p}: $t"
+    [ "$p" == "C:D" ] && echo ${t} | $GREP -q cdpmgr && t="$(echo ${t} | tr ' ' '\n' | grep cdpmgr)"
+    unset ef e
 
     for r in ${t} ; do
       typeset pid=$(echo $r | $AWK -F"@" '{ print $1 }')
