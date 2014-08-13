@@ -17,7 +17,7 @@ searchprocs="apache httpd java tomcat jboss websphere python perl php"
 searchpkgs="apache apache2 java tomcat jboss python perl php"
 searchdirs="/opt /etc /export"
 fskeywords="[aA]pache java [tT]omcat [jJ][bB]oss"
-procfilter="bash sh LLAWP javasrv"
+procfilter="bash sh tail LLAWP javasrv"
 output_fieldseparator=';'
 output_valueseparator=' '
 java_tmpfile="/tmp/${$}.java"
@@ -262,7 +262,7 @@ function check_versions {
           done
         fi
         if [ ! -d "${catalina_home}" ]; then
-          echoerr "ERROR failed to detect CATALINA_HOME"
+          echoerr "ERROR failed to detect CATALINA_HOME of pid $pid command $command"
           [ $TRACE ] && echoerr "TRACE catalina_home_final: ${catalina_home}"
           return 1
         fi
@@ -350,7 +350,8 @@ function search_processes {
   [ ${SHOW_PROCS} ] && echo '#---- checking running processes ----#'
   for p in $searchprocs ; do
     [ "$p" == "apache" ] && ef='|org.apache'
-    [ "$p" == "jboss" ] && ef='|jbossall-client'
+    [ "$p" == "tomcat" ] && ef='|astro'
+    [ "$p" == "jboss" ] && ef='|jbossall-client|astro'
     [ "$p" == "websphere" ] && ef='|InformationServer'
     typeset t=$($PS | $GREP -i "${p}" | $GREP -vE "${f}${ef}" | $AWK '{ print $1"@"$5 }')
     [ ${SHOW_PROCS} ] && echo "PROCESSES ${p}: $t"
