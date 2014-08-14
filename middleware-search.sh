@@ -189,6 +189,14 @@ function get_proc_fullpath {
 
 }
 
+function get_csv_header {
+  typeset csv_header="hostname${output_fieldseparator}"
+  for p in $searchprocs; do
+    csv_header="${csv_header}${p}_version${output_fieldseparator}${p}_IPs${output_fieldseparator}"
+  done
+  echo "${csv_header}"
+}
+
 function check_versions {
   typeset process=$1
   typeset input=$2
@@ -401,14 +409,13 @@ function search_processes {
 
     if [ $CSV_OUTPUT ]; then
       typeset csv="$(sort_array "${output}")${output_fieldseparator}$(sort_array "${net}")"
-      typeset csv_header="${csv_header}${p}_version;${p}_IPs;"
       typeset csv_out="${csv_out}${output_fieldseparator}${csv}"
     else
       echo "${p}${output_fieldseparator}$(sort_array "${output}")${output_fieldseparator}$(sort_array "${net}")" | $SED 's/[()]//g'
     fi
     unset output net subres r t p
   done
-  [ $CSV_OUTPUT ] && [ ! $BE_QUIET ] && echo "hostname;${csv_header}"
+  [ $CSV_OUTPUT ] && [ ! $BE_QUIET ] && echo "$(get_csv_header)"
   [ $CSV_OUTPUT ] && echo "${HOSTNAME}${csv_out}" | $SED 's/[()]//g'
   [ $BE_QUIET ] || echo '#------------------------------------#'
   unset p
@@ -496,6 +503,10 @@ function read_remotefile {
   typeset remotehost
   typeset curjobs
   typeset remoteuser
+
+  if [ $BE_QUIET ]; then
+    echo "$(get_csv_header)"
+  fi
 
   for remotehost in $(cat $RHFILE | $SED '/^#/d'); do
     [ $(echo $remotehost | $GREP -q "@"; echo $?) -ne 0 ] && remoteuser="root@"
