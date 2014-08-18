@@ -165,7 +165,7 @@ function get_proc_env {
   typeset var="$2"
 
   if [ "$OS" = "solaris" ]; then
-    typeset pvar=$(pargs -e $pid | $GREP $var | $SED "s/.*${var}=\(.*\)$/\1/"; exit ${PIPESTATUS[0]})
+    typeset pvar=$(pargs -e $pid 2>/dev/null | $GREP $var | $SED "s/.*${var}=\(.*\)$/\1/"; exit ${PIPESTATUS[0]})
   elif [ "$OS" = "linux" ]; then
     typeset pvar=$(tr '\0' '\n' < /proc/$pid/environ | $GREP $var | $SED "s/.*${var}=\(.*\)$/\1/"; exit ${PIPESTATUS[0]})
   fi
@@ -179,7 +179,7 @@ function get_proc_fullpath {
   typeset pid="$1"
 
   if [ "$OS" = "solaris" ]; then
-    typeset pcmd=$(pargs -l $pid | $AWK '{ print $1 }'; exit ${PIPESTATUS[0]})
+    typeset pcmd=$(pargs -l $pid 2>/dev/null | $AWK '{ print $1 }'; exit ${PIPESTATUS[0]})
   elif [ "$OS" = "linux" ]; then
     typeset pcmd=$(ls -l /proc/$pid/exe | $AWK '{ print $NF }'; exit ${PIPESTATUS[0]})
   fi
@@ -195,9 +195,9 @@ function get_proc_fullpath {
 
 function check_zone {
   typeset pid="$1"
-  [ $OS = "solaris" ] || return 1
+  ([ $OS = "solaris" ] && [ "$(uname -r | cut -c3)" -lt 10 ]) || return 0
   typeset curzone=$(/usr/bin/zonename)
-  typeset pzone="$(/usr/bin/ps -efZ | $GREP " $pid " | $GREP -v grep | $AWK '{ print $1 }' | sort -u)"
+  typeset pzone="$(/usr/bin/ps -efZ 2>/dev/null | $GREP " $pid " | $GREP -v grep | $AWK '{ print $1 }' | sort -u)"
   if [ "$curzone" = "global" ] && [ "$curzone" != "$pzone" ]; then
     [ $DEBUG ] && echoerr "ERROR: pid $pid is in another zone: $pzone"
     return 1
