@@ -490,15 +490,16 @@ function search_filesystem {
 function ssh_exec {
   typeset rhost="$1"
 
+  [ $(echo $rhost | $GREP -q "@"; echo $?) -ne 0 ] && remoteuser="root@"
   [ $DEBUG ] && echoerr "checking remote shell"
-  typeset rshell=$(ssh ${ssh_opts} $rhost -C "command -v bash")
-  [ $? -eq 0 ] || typeset rshell=$(ssh $rhost -C "command -v ksh")
+  typeset rshell=$(ssh ${ssh_opts} ${remoteuser}${rhost} -C "command -v bash")
+  [ $? -eq 0 ] || typeset rshell=$(ssh ${remoteuser}${rhost} -C "command -v ksh")
   if [ -z "$rshell" ]; then
     echoerr "ERROR could not determine remote shell for host $rhost, skipping"
     return 1
   else
     [ $DEBUG ] && echoerr "remote shell: $rshell"
-    ssh ${ssh_opts} $rhost "cat | $rshell /dev/stdin" "$REMOTE_OPTS" < "$MYSELF"
+    ssh ${ssh_opts} ${remoteuser}${rhost} "cat | $rshell /dev/stdin" "$REMOTE_OPTS" < "$MYSELF"
   fi
 }
 
@@ -512,9 +513,8 @@ function read_remotefile {
   fi
 
   for remotehost in $(cat $RHFILE | $SED '/^#/d'); do
-    [ $(echo $remotehost | $GREP -q "@"; echo $?) -ne 0 ] && remoteuser="root@"
     [ -z "$remotehost" ] && continue
-    [ $DEBUG ] && echoerr "DEBUG read_remotefile: checking host $remotehost user ${remoteuser%@}"
+    [ $DEBUG ] && echoerr "DEBUG read_remotefile: checking host $remotehost"
     curjobs=$(jobs | wc -l)
     while [ $MAX_THREADS -ne 1 ] && [ $curjobs -ge $MAX_THREADS ]; do
       [ $TRACE ] && echoerr "TRACE read_remotefile: job num $curjobs >= max $MAX_THREADS"
@@ -522,9 +522,9 @@ function read_remotefile {
       curjobs=$(jobs | wc -l)
     done
     if [ $MAX_THREADS -eq 1 ]; then
-      ssh_exec "${remoteuser}${remotehost}"
+      ssh_exec "${remotehost}"
     else
-      ssh_exec "${remoteuser}${remotehost}" &
+      ssh_exec "${remotehost}" &
       typeset waitpids="$waitpids ${!}"
     fi
     remoteuser=""
