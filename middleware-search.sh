@@ -121,7 +121,8 @@ function check_return_code {
 }
 
 function echoerr {
-  echo "$@" 1>&2;
+  [ $ERR_SHOW_HOST ] && typeset outprefix="${HOSTNAME}:"
+  echo "${outprefix} $@" 1>&2;
 }
 
 function set_newest_java {
@@ -315,7 +316,7 @@ function check_versions {
           done
         fi
         if [ ! -d "${jboss_home}" ]; then
-          echoerr "ERROR failed to detect JBOSS_HOME"
+          echoerr "ERROR failed to detect JBOSS_HOME of pid $pid command $command"
           [ $TRACE ] && echoerr "TRACE jboss_home: ${jboss_home}"
           return 1
         fi
@@ -569,6 +570,10 @@ while :; do
       REMOTE_OPTS="$REMOTE_OPTS -t"
       shift
       ;;
+    -H | --showhost)
+      ERR_SHOW_HOST=true
+      shift
+      ;;
     -c | --csv)
       CSV_OUTPUT=true
       REMOTE_OPTS="$REMOTE_OPTS -c"
@@ -586,6 +591,7 @@ while :; do
       [ ! -r $RHFILE ] && echoerr "Input ERROR: file $RHFILE not found" && exit 2
       READ_RHFILE=true
       REMOTE_EXEC=true
+      REMOTE_OPTS="$REMOTE_OPTS -H"
       shift 2
       ;;
     -n | --numthreads)
