@@ -191,6 +191,18 @@ function get_proc_fullpath {
 
 }
 
+function check_zone {
+  typeset pid="$1"
+  [ $OS = "solaris" ] || return 1
+  typeset curzone=$(/usr/bin/zonename)
+  typeset pzone="$(/usr/bin/ps -efZ | $GREP " $pid " | $GREP -v grep | $AWK '{ print $1 }' | sort -u)"
+  if [ "$curzone" = "global" ] && [ "$curzone" != "$pzone" ]; then
+    [ $DEBUG ] && echoerr "ERROR: pid $pid is in another zone: $pzone"
+    return 1
+  fi
+  return 0
+}
+
 function get_csv_header {
   typeset csv_header="hostname${output_fieldseparator}"
   for p in $searchprocs; do
@@ -206,7 +218,7 @@ function check_versions {
   typeset pid=$(echo $input | $AWK -F"@" '{ print $1 }')
   typeset command=$(echo $input | $AWK -F"@" '{ print $2 }')
 
-  if is_inprocfilter "$command"; then
+  if is_inprocfilter "$command" || ! check_zone "$pid"; then
      [ ${DEBUG} ] && echoerr "INFO skipping $command"
      return 1
   fi
@@ -432,6 +444,7 @@ function get_proc_tcpports {
 
   case "$OS" in
   solaris)
+    check_zone "$pid" || return 1
     ips=$($PFILES $pid 2>/dev/null | $AWK '/sockname: AF_INET/ {x=$3;y=$5; getline; if($0 !~ /peername/ )  print x":"y }' | sort -u | $SED 's/0.0.0.0:0//g' | tr '\n' ' '; exit ${PIPESTATUS[0]})
     ret=$?
     echo "$ips" | $GREP -Eq "([0-9]{1,3}\.){3}[0-9]{1,3}" || ret=1
