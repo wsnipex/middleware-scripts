@@ -87,6 +87,7 @@ function get_env {
       ;;
   esac   
   HOSTNAME="$($HOST $(hostname) | $AWK '{ print $1 }')"
+  [ -z "$HOSTNAME" ] &&  HOSTNAME="$(nslookup $(hostname) | $AWK '/Name:/ {print $2}')"
 }
 
 function command_exists {
