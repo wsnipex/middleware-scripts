@@ -195,8 +195,8 @@ function get_proc_fullpath {
 
 function check_zone {
   typeset pid="$1"
-  ([ $OS = "solaris" ] && [ "$(uname -r | cut -c3)" -lt 10 ]) || return 0
-  typeset curzone=$(/usr/bin/zonename)
+  ([ $OS = "solaris" ] && [ "$(uname -r | cut -c3,4)" -ge 10 ]) || return 0
+  typeset curzone=$(/usr/bin/zonename 2>/dev/null)
   typeset pzone="$(/usr/bin/ps -efZ 2>/dev/null | $GREP " $pid " | $GREP -v grep | $AWK '{ print $1 }' | sort -u)"
   if [ "$curzone" = "global" ] && [ "$curzone" != "$pzone" ]; then
     [ $DEBUG ] && echoerr "ERROR: pid $pid is in another zone: $pzone"
