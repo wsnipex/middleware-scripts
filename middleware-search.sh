@@ -71,6 +71,7 @@ function get_env {
       [ $(command_exists /usr/bin/nawk) -eq 0 ] && AWK="/usr/bin/nawk"
       [ $(command_exists /usr/bin/sed) -eq 0 ] && SED="/usr/bin/sed"
       [ $(command_exists /usr/sbin/host) -eq 0 ] && HOST="/usr/sbin/host"
+      [ $(command_exists /usr/sbin/nslookup) -eq 0 ] && NSLOOKUP="/usr/sbin/nslookup"
       [ $(command_exists /usr/proc/bin/pfiles) -eq 0 ] && PFILES="/usr/proc/bin/pfiles"
       ;;
     Linux)
@@ -80,6 +81,7 @@ function get_env {
       [ $(command_exists /usr/bin/awk) -eq 0 ] && AWK="/usr/bin/awk"
       [ $(command_exists /bin/sed) -eq 0 ] && SED="/bin/sed"
       [ $(command_exists /usr/bin/host) -eq 0 ] && HOST="/usr/bin/host"
+      [ $(command_exists /usr/bin/nslookup) -eq 0 ] && NSLOOKUP="/usr/bin/nslookup"
 
       ;;
     *)
@@ -87,7 +89,7 @@ function get_env {
       ;;
   esac   
   HOSTNAME="$($HOST $(hostname) | $AWK '{ print $1 }')"
-  [ -z "$HOSTNAME" ] &&  HOSTNAME="$(nslookup $(hostname) | $AWK '/Name:/ {print $2}')"
+  [ -z "$HOSTNAME" ] &&  HOSTNAME="$($NSLOOKUP $(hostname) | $AWK '/Name:/ {print $2}')"
 }
 
 function command_exists {
