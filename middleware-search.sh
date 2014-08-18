@@ -17,7 +17,7 @@ searchprocs="apache httpd java tomcat jboss websphere C:D python perl php"
 searchpkgs="apache apache2 java tomcat jboss python perl php"
 searchdirs="/opt /etc /export"
 fskeywords="[aA]pache java [tT]omcat [jJ][bB]oss"
-procfilter="bash sh tail ssh LLAWP javasrv"
+procfilter="bash /bin/sh tail ssh LLAWP javasrv"
 output_fieldseparator=';'
 output_valueseparator=' '
 java_tmpfile="/tmp/${$}.java"
@@ -203,14 +203,16 @@ function check_versions {
 
   typeset pid=$(echo $input | $AWK -F"@" '{ print $1 }')
   typeset command=$(echo $input | $AWK -F"@" '{ print $2 }')
+
   if is_inprocfilter "$command"; then
      [ ${DEBUG} ] && echoerr "INFO skipping $command"
      return 1
   fi
+
   if [ ! -f "$command" ]; then
     typeset pcmd="$(get_proc_fullpath "$pid")"
     [ $DEBUG ] && echoerr "DEBUG check_versions - $command full path: $pcmd"
-    if [ -f "$pcmd" ]; then
+    if [ -f "$pcmd" ] && ! is_inprocfilter "$pcmd"; then
       command=$pcmd
     else
       echoerr "DEBUG check_versions - $command does not exist"
