@@ -505,6 +505,7 @@ function search_filesystem {
 
 function ssh_exec {
   typeset rhost="$1"
+  typeset remoteuser
 
   [ $(echo $rhost | $GREP -q "@"; echo $?) -ne 0 ] && remoteuser="root@"
   [ $DEBUG ] && echoerr "checking remote shell"
@@ -522,7 +523,6 @@ function ssh_exec {
 function read_remotefile {
   typeset remotehost
   typeset curjobs
-  typeset remoteuser
 
   if [ $BE_QUIET ]; then
     echo "$(get_csv_header)"
@@ -543,7 +543,6 @@ function read_remotefile {
       ssh_exec "${remotehost}" &
       typeset waitpids="$waitpids ${!}"
     fi
-    remoteuser=""
   done
   wait $waitpids
   exit 0
