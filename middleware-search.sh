@@ -306,7 +306,7 @@ function check_versions {
       if ! check_return_code "$tomcat_command" "$ret" "$output" || [ -z "$output" ]; then
         if echo "$catalina_home" | $GREP -Eq "^/usr/apache"; then
           [ $DEBUG ] && echoerr "INFO: tomcat $catalina_home seems to be a system package, trying package manager"
-          [ "$OS" = "solaris" ] && typeset output="pkg:$(pkginfo -l SUNWtcatr 2>/dev/null | awk '/VERSION:/ { print $2 }'; exit ${PIPESTATUS[0]})"
+          [ "$OS" = "solaris" ] && typeset output="pkg:$(pkginfo -l SUNWtcatr 2>/dev/null | awk '/VERSION:/ { print $2 }' | $SED 's/,.*//g'; exit ${PIPESTATUS[0]})"
         else
           typeset tomcat_command="JAVA_HOME=${java_home} sh ${catalina_home}/bin/catalina.sh"
           typeset output=$(eval ${tomcat_command} 2>&1 | $GREP CATALINA_HOME | $SED 's/.*-\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/'; exit ${PIPESTATUS[1]})
