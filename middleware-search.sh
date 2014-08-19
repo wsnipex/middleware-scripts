@@ -165,7 +165,7 @@ function get_proc_env {
   typeset var="$2"
 
   if [ "$OS" = "solaris" ]; then
-    typeset pvar=$(pargs -e $pid 2>/dev/null | $GREP $var | $SED "s/.*${var}=\(.*\)$/\1/"; exit ${PIPESTATUS[0]})
+    typeset pvar=$(pargs -e -a $pid 2>/dev/null | $GREP "${var}" | $SED "s/.*${var}=\(.*\)$/\1/"; exit ${PIPESTATUS[0]})
   elif [ "$OS" = "linux" ]; then
     typeset pvar=$(tr '\0' '\n' < /proc/$pid/environ | $GREP $var | $SED "s/.*${var}=\(.*\)$/\1/"; exit ${PIPESTATUS[0]})
   fi
@@ -261,6 +261,7 @@ function check_versions {
       typeset java_home=$(get_proc_env "$pid" "JAVA_HOME")
       typeset catalina_home=$(get_proc_env "$pid" "CATALINA_HOME")
       [ ! -d "$catalina_home" ] && catalina_home=$(get_proc_env "$pid" "TOMCAT_HOME")
+      [ ! -d "$catalina_home" ] && catalina_home=$(get_proc_env "$pid" "\-Dcatalina.home")
       if [ ! -d "$catalina_home" ]; then
         [ $DEBUG ] && echoerr "DEBUG tomcat - catalina_home not found, trying jps and friends"
         java_home="$(dirname $command)/.."
@@ -302,8 +303,13 @@ function check_versions {
       [ $TRACE ] && echoerr "TRACE tomcat_command: $tomcat_command"
       typeset output=$(eval ${tomcat_command} | $GREP -iE "version.*tomcat" | $SED 's/.*\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/' ; exit ${PIPESTATUS[0]})
       if ! check_return_code "$tomcat_command" "$?" "$output" || [ -z "$output" ]; then
-        typeset tomcat_command="JAVA_HOME=${java_home} sh ${catalina_home}/bin/catalina.sh"
-        typeset output=$(eval ${tomcat_command} 2>&1 | $GREP CATALINA_HOME | $SED 's/.*-\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/'; exit ${PIPESTATUS[1]})
+        if echo "$catalina_home" | $GREP -Eq "^/usr/apache"; then
+          [ $DEBUG ] && echoerr "INFO: tomcat $catalina_home seems to be a system package, trying package manager"
+          [ "$OS" = "solaris" ] && typeset output="pkg:$(pkginfo -l SUNWtcatr 2>/dev/null | awk '/VERSION:/ { print $2 }'; exit ${PIPESTATUS[0]})"
+        else
+          typeset tomcat_command="JAVA_HOME=${java_home} sh ${catalina_home}/bin/catalina.sh"
+          typeset output=$(eval ${tomcat_command} 2>&1 | $GREP CATALINA_HOME | $SED 's/.*-\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/'; exit ${PIPESTATUS[1]})
+        fi
       fi
       if ! check_return_code "$tomcat_command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
       ;;
