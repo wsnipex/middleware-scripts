@@ -300,9 +300,10 @@ function check_versions {
         typeset tomcat_tmp=$(echo ${catalina_home} | $SED 's|^/usr/share/||g')
         [ $(command_exists $tomcat_tmp) -eq 0 ] && typeset tomcat_command="sh ${tomcat_tmp} version"
       fi
-      [ $TRACE ] && echoerr "TRACE tomcat_command: $tomcat_command"
-      typeset output=$(eval ${tomcat_command} | $GREP -iE "version.*tomcat" | $SED 's/.*\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/' ; exit ${PIPESTATUS[0]})
-      if ! check_return_code "$tomcat_command" "$?" "$output" || [ -z "$output" ]; then
+      typeset output=$(eval ${tomcat_command} | $GREP -iE "version.*tomcat|^Server number" | $SED -e 's/.*\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/' -e 's/[^0-9\.]//g' -e '/^$/d' | head -1 ; exit ${PIPESTATUS[0]})
+      typeset ret=$?
+      [ $TRACE ] && echoerr "TRACE tomcat_command: $tomcat_command OUT: $output Ret: $?"
+      if ! check_return_code "$tomcat_command" "$ret" "$output" || [ -z "$output" ]; then
         if echo "$catalina_home" | $GREP -Eq "^/usr/apache"; then
           [ $DEBUG ] && echoerr "INFO: tomcat $catalina_home seems to be a system package, trying package manager"
           [ "$OS" = "solaris" ] && typeset output="pkg:$(pkginfo -l SUNWtcatr 2>/dev/null | awk '/VERSION:/ { print $2 }'; exit ${PIPESTATUS[0]})"
