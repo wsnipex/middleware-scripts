@@ -336,8 +336,9 @@ function check_versions {
           return 1
         fi
       fi
-      typeset jboss_command="JBOSS_HOME=${jboss_home} JAVA_HOME=${java_home} sh ${jboss_home}/bin/run.sh -V"
-      typeset output=$(eval ${jboss_command} | $GREP -i "build" | $SED -e 's/[jJ][bB][oO][sS][sS]//' -e 's/(.*)//'; exit ${PIPESTATUS[0]})
+      typeset jboss_command="sh ${jboss_home}/bin/run.sh -V JBOSS_HOME=${jboss_home} JAVA_HOME=${java_home}"
+      typeset jb_out=$(exec_with_timeout "${jboss_command}")
+      typeset output="$(echo $jb_out | tr ' ' "\n" | $SED -n '/^\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/p')"
       if ! check_return_code "$jboss_command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
       ;;
     websphere)
@@ -502,6 +503,33 @@ function search_filesystem {
   [ $BE_QUIET ] || echo "# running: $findstring #"
   eval ${findstring} 2>/dev/null
 }
+
+function exec_with_timeout {
+  typeset timeout="10"
+  typeset command="$1"
+  shift
+
+  for arg in "$@"; do
+   typeset args="$args '$arg'"
+  done
+  [ $TRACE ] && echoerr "exec_with_timeout: command: $command" 
+
+  ( $command $args 2>/dev/null) & pid=$!
+  (
+    t=0
+    while [ $t -lt $timeout ]; do
+      sleep 1
+      kill -0 $pid || exit 0
+      let t=$t+1
+    done
+
+    kill $pid && kill -0 $pid || exit 0
+    sleep 2
+    kill -9 $pid
+  ) >/dev/null 2>&1
+}
+
+
 
 function ssh_exec {
   typeset rhost="$1"
