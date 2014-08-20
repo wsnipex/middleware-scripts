@@ -17,7 +17,7 @@ searchprocs="apache httpd java tomcat jboss websphere C:D python perl php"
 searchpkgs="apache apache2 java tomcat jboss python perl php"
 searchdirs="/opt /etc /export"
 fskeywords="[aA]pache java [tT]omcat [jJ][bB]oss"
-procfilter="bash /bin/sh tail ssh LLAWP javasrv snoop"
+procfilter="bash /bin/sh tail ssh LLAWP javasrv snoop tcpdump less more vi gzip"
 output_fieldseparator=';'
 output_valueseparator=' '
 java_tmpfile="/tmp/${$}.java"
@@ -88,7 +88,7 @@ function get_env {
       OS="unknown"
       ;;
   esac   
-  HOSTNAME="$($HOST $(hostname) | $AWK '{ print $1 }')"
+  HOSTNAME="$($HOST $(hostname) 2>/dev/null | $AWK '{ print $1 }')"
   [ -z "$HOSTNAME" ] &&  HOSTNAME="$($NSLOOKUP $(hostname) | $AWK '/Name:/ {print $2}')"
 }
 
