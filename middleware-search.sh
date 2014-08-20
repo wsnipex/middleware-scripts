@@ -295,6 +295,7 @@ function check_versions {
         fi
       fi
       if [ -f "${catalina_home}/bin/catalina.sh" ]; then
+        [ "$OS" = "linux" ] && readlink ${catalina_home} >/dev/null && catalina_home=$(readlink -f ${catalina_home})
         typeset tomcat_command="CATALINA_HOME=${catalina_home} JAVA_HOME=${java_home} sh ${catalina_home}/bin/catalina.sh version"
       elif [ $(echo ${catalina_home} | $GREP -Eq "^/usr/share/"; echo $?) -eq 0 ]; then
         typeset tomcat_tmp=$(echo ${catalina_home} | $SED 's|^/usr/share/||g')
