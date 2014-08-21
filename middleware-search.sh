@@ -38,6 +38,7 @@ function usage {
   echo "usage $(basename $0)
   [-h | --help]               ... this help
   [-p | --procs]              ... show processes in output        [default no]
+  [-i | --interfaces]         ... show tcp listen ips of processes[default no]
   [-d | --debug]              ... enable debug output, implies -p [default no]
   [-t | --trace]              ... enable trace output, implies -d [default no]
   [-c | --csv]                ... enable CSV output               [default no]
@@ -208,7 +209,11 @@ function check_zone {
 function get_csv_header {
   typeset csv_header="hostname${output_fieldseparator}"
   for p in $searchprocs; do
-    csv_header="${csv_header}${p}_version${output_fieldseparator}${p}_IPs${output_fieldseparator}"
+    if [ $SHOW_IPS ]; then
+      csv_header="${csv_header}${p}_version${output_fieldseparator}${p}_IPs${output_fieldseparator}"
+    else
+      csv_header="${csv_header}${p}_version${output_fieldseparator}"
+    fi
   done
   echo "${csv_header}"
 }
@@ -422,7 +427,7 @@ function search_processes {
           typeset output=""${output}" "${t}""
         fi
       fi
-      if [ "$p" = "java" ] || is_inarray "${pid}" "${duplicates_net}"; then : ; else
+      if [ $SHOW_IPS ] && [ "$p" != "java" ] && ! is_inarray "${pid}" "${duplicates_net}"; then
         duplicates_net=""${duplicates_net}" "${pid}""
         [ ${DEBUG} ] && echoerr "NETCHECK: $p $pid"
         typeset n="$(get_proc_tcpports $pid)"
@@ -434,11 +439,12 @@ function search_processes {
     done
     unset r t n
 
+    [ $SHOW_IPS ] && typeset ips_out="${output_fieldseparator}$(sort_array "${net}")"
     if [ $CSV_OUTPUT ]; then
-      typeset csv="$(sort_array "${output}")${output_fieldseparator}$(sort_array "${net}")"
+      typeset csv="$(sort_array "${output}")"${ips_out}""
       typeset csv_out="${csv_out}${output_fieldseparator}${csv}"
     else
-      echo "${p}${output_fieldseparator}$(sort_array "${output}")${output_fieldseparator}$(sort_array "${net}")" | $SED 's/[()]//g'
+      echo "${p}${output_fieldseparator}$(sort_array "${output}")"${ips_out}"" | $SED 's/[()]//g'
     fi
     unset output net subres r t p
   done
@@ -606,6 +612,11 @@ while :; do
     -p | --procs)
       SHOW_PROCS=true
       REMOTE_OPTS="$REMOTE_OPTS -p"
+      shift
+      ;;
+    -i | --interfaces)
+      SHOW_IPS=true
+      REMOTE_OPTS="$REMOTE_OPTS -i"
       shift
       ;;
     -d | --debug)
