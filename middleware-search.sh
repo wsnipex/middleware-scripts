@@ -207,7 +207,7 @@ function check_zone {
 }
 
 function get_csv_header {
-  typeset csv_header="hostname${output_fieldseparator}"
+  typeset csv_header="hostname${output_fieldseparator}"OS"${output_fieldseparator}"
   for p in $searchprocs; do
     if [ $SHOW_IPS ]; then
       csv_header="${csv_header}${p}_version${output_fieldseparator}${p}_IPs${output_fieldseparator}"
@@ -449,7 +449,7 @@ function search_processes {
     unset output net subres r t p
   done
   [ $CSV_OUTPUT ] && [ ! $BE_QUIET ] && echo "$(get_csv_header)"
-  [ $CSV_OUTPUT ] && echo "${HOSTNAME}${csv_out}" | $SED 's/[()]//g'
+  [ $CSV_OUTPUT ] && echo "${HOSTNAME}${output_fieldseparator}${OS}${csv_out}" | $SED 's/[()]//g'
   [ $BE_QUIET ] || echo '#------------------------------------#'
   unset p
 }
