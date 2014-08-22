@@ -95,7 +95,9 @@ function get_env {
 
 function command_exists {
   command -v $1 >/dev/null 2>&1
-  echo $?
+  typeset ret=$?
+  echo $ret
+  return $ret
 }
 
 function is_inarray {
@@ -192,6 +194,18 @@ function get_proc_fullpath {
   fi
   return $ret
 
+}
+
+function get_real_path {
+  typeset path="$1"
+  readlink "$path" >/dev/null 2>&1 && readlink -f "$path" && return 0
+  command_exists perl >/dev/null 2>&1 && typeset rpath=$(perl -e 'use Cwd "abs_path"; print abs_path(${ARGV[0]})' $path)
+  if [ -f $rpath ] || [ -d $rpath ]; then
+    echo $rpath
+  else
+    echo $path
+  fi
+  return 0
 }
 
 function check_zone {
@@ -300,7 +314,7 @@ function check_versions {
         fi
       fi
       if [ -f "${catalina_home}/bin/catalina.sh" ]; then
-        [ "$OS" = "linux" ] && readlink ${catalina_home} >/dev/null && catalina_home=$(readlink -f ${catalina_home})
+        catalina_home=$(get_real_path ${catalina_home})
         typeset tomcat_command="CATALINA_HOME=${catalina_home} JAVA_HOME=${java_home} sh ${catalina_home}/bin/catalina.sh version"
       elif [ $(echo ${catalina_home} | $GREP -Eq "^/usr/share/"; echo $?) -eq 0 ]; then
         typeset tomcat_tmp=$(echo ${catalina_home} | $SED 's|^/usr/share/||g')
