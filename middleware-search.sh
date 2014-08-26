@@ -184,7 +184,7 @@ function get_proc_fullpath {
   if [ "$OS" = "solaris" ]; then
     typeset pcmd=$(pargs -l $pid 2>/dev/null | $AWK '{ print $1 }'; exit ${PIPESTATUS[0]})
   elif [ "$OS" = "linux" ]; then
-    typeset pcmd=$(ls -l /proc/$pid/exe | $AWK '{ print $NF }'; exit ${PIPESTATUS[0]})
+    typeset pcmd=$(get_real_path "/proc/$pid/exe")
   fi
   ret=$?
   [ $TRACE ] && echoerr "TRACE get_proc_fullpath - pcmd: $pcmd ret: $ret"
@@ -193,7 +193,6 @@ function get_proc_fullpath {
     return 0
   fi
   return $ret
-
 }
 
 function get_real_path {
@@ -382,6 +381,9 @@ function check_versions {
       else
         echoerr "ERROR - C:D procs running, but cduser not found"
       fi
+      ;;
+    MQ)
+
       ;;
     python)
       typeset output=$($command -V 2>&1 | $AWK '{ print $2 }')
