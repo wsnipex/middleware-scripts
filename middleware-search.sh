@@ -13,11 +13,11 @@
 
 #----------------------- CONFIG ------------------------------------#
 
-searchprocs="apache httpd java tomcat jboss websphere C:D python perl php"
+searchprocs="apache httpd java tomcat jboss websphere C:D MQ python perl php"
 searchpkgs="apache apache2 java tomcat jboss python perl php"
 searchdirs="/opt /etc /export"
 fskeywords="[aA]pache java [tT]omcat [jJ][bB]oss"
-procfilter="bash /bin/sh tail ssh LLAWP javasrv snoop tcpdump less more vi gzip"
+procfilter="bash /bin/sh tail ssh LLAWP javasrv snoop tcpdump less more vi gzip grep"
 output_fieldseparator=';'
 output_valueseparator=' '
 java_tmpfile="/tmp/${$}.java"
@@ -383,7 +383,16 @@ function check_versions {
       fi
       ;;
     MQ)
-
+      typeset mq_home="$(dirname $command)"
+      if [ -f ${mq_home}/dspmqver ]; then
+        typeset output=$(${mq_home}/dspmqver | $AWK '/Version:/ { print $2 }')
+      elif [ -f ${mq_home}/mqver ]; then
+        typeset output=$(${mq_home}/mqver | $AWK '/Version:/ { print $2 }')
+      else
+        # todo: check pkg manager
+        echoerr "ERROR: MQ detected, but neither dspmqver nor mqver exist in ${mq_home}"
+        return 1
+      fi
       ;;
     python)
       typeset output=$($command -V 2>&1 | $AWK '{ print $2 }')
@@ -426,6 +435,7 @@ function search_processes {
     [ "$p" == "jboss" ] && ef='|jbossall-client|astro'
     [ "$p" == "websphere" ] && ef='|InformationServer'
     [ "$p" == "C:D" ] && e='|cdpmgr|cdstatm'
+    [ "$p" == "MQ" ] && e='|runmqlsr|amq[cfhlprxz]|amqr|runmq' && ef='|mqueue'
 
     typeset t=$($PS | $GREP -iE "${p}${e}" | $GREP -vE "${f}${ef}" | $AWK '{ print $1"@"$5 }')
     [ ${SHOW_PROCS} ] && echo "PROCESSES ${p}: $t"
