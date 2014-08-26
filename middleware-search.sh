@@ -17,7 +17,7 @@ searchprocs="apache httpd java tomcat jboss websphere C:D MQ python perl php"
 searchpkgs="apache apache2 java tomcat jboss python perl php"
 searchdirs="/opt /etc /export"
 fskeywords="[aA]pache java [tT]omcat [jJ][bB]oss"
-procfilter="bash /bin/sh tail ssh LLAWP javasrv snoop tcpdump less more vi gzip grep"
+procfilter="bash /bin/sh tail ssh LLAWP javasrv snoop tcpdump less more vi gzip grep rsync"
 output_fieldseparator=';'
 output_valueseparator=' '
 java_tmpfile="/tmp/${$}.java"
@@ -435,7 +435,7 @@ function search_processes {
     [ "$p" == "jboss" ] && ef='|jbossall-client|astro'
     [ "$p" == "websphere" ] && ef='|InformationServer'
     [ "$p" == "C:D" ] && e='|cdpmgr|cdstatm'
-    [ "$p" == "MQ" ] && e='|runmqlsr|amq[cfhlprxz]|amqr|runmq' && ef='|mqueue'
+    [ "$p" == "MQ" ] && e='xxxx|runmqlsr|amq[cfhlprxz]|amqr|runmq'
 
     typeset t=$($PS | $GREP -iE "${p}${e}" | $GREP -vE "${f}${ef}" | $AWK '{ print $1"@"$5 }')
     [ ${SHOW_PROCS} ] && echo "PROCESSES ${p}: $t"
