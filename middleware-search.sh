@@ -364,9 +364,21 @@ function check_versions {
         fi
       fi
       typeset jboss_command="sh ${jboss_home}/bin/run.sh -V JBOSS_HOME=${jboss_home} JAVA_HOME=${java_home}"
-      typeset jb_out=$(exec_with_timeout "${jboss_command}")
-      typeset output="$(echo $jb_out | tr ' ' "\n" | $SED -n '/^\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/p')"
-      if ! check_return_code "$jboss_command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
+      if [ -f ${jboss_home}/bin/run.sh ]; then
+        typeset jb_out=$(exec_with_timeout "${jboss_command}")
+        typeset output="$(echo $jb_out | tr ' ' "\n" | $SED -n '/^\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/p')"
+        if ! check_return_code "$jboss_command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
+      else
+        typeset jb_tmp=$(get_real_path ${jboss_home})
+        jboss_home="$(echo $jb_tmp | $SED 's|^\(.*[jJ][bB]oss-[0-9].[0-9].[0-9][\.A-Z]*/\).*$|\1|g')"
+        jboss_command="sh ${jboss_home}/bin/run.sh -V"
+        if [ -f $jboss_home/bin/run.sh ]; then
+          typeset jb_out=$(exec_with_timeout "${jboss_command}")
+          typeset output="$(echo $jb_out | tr ' ' "\n" | $SED -n '/^\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/p')"
+        else
+          echoerr "ERROR failed to detect JBOSS_HOME of pid $pid command $command"; return 1
+        fi
+      fi
       ;;
     websphere)
       typeset ws_home=$(echo $command | $SED 's|\(.*AppServer\).*$|\1/bin|')
