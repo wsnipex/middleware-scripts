@@ -597,7 +597,10 @@ function ssh_exec {
     return 1
   else
     [ $DEBUG ] && echoerr "remote shell: $rshell"
-    ssh ${ssh_opts} ${remoteuser}${rhost} "cat | $rshell /dev/stdin" "$REMOTE_OPTS" < "$MYSELF"
+    {
+      printf '%s\n' "set -- $REMOTE_OPTS"
+      cat "$MYSELF"
+    } | ssh ${ssh_opts} ${remoteuser}${rhost} "$rshell -s"
   fi
 }
 
