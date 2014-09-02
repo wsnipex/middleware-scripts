@@ -329,10 +329,11 @@ function check_versions {
         else
           typeset tomcat_command="JAVA_HOME=${java_home} sh ${catalina_home}/bin/catalina.sh"
           typeset output=$(eval ${tomcat_command} 2>&1 | $GREP CATALINA_HOME | $SED 's/.*-\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/'; exit ${PIPESTATUS[1]})
-          [ -z "$output" ] && output="$(echo ${catalina_home} | $SED -e 's/.*\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/' | $GREP -E "^[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,3}")*"
+          typeset ret=$?
+          [ -z "$output" ] && output="$(echo ${catalina_home} | $SED -e 's/.*\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/' | $GREP -E "^[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,3}"; exit ${PIPESTATUS[2]})*" && typeset ret=$?
         fi
       fi
-      if ! check_return_code "$tomcat_command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
+      if ! check_return_code "$tomcat_command" "$ret" "$output"; then set_procfilter "$command"; return 1; fi
       ;;
     jboss)
       typeset java_home=$(get_proc_env "$pid" "JAVA_HOME")
