@@ -590,9 +590,9 @@ function ssh_exec {
   typeset remoteuser
 
   [ $(echo $rhost | $GREP -q "@"; echo $?) -ne 0 ] && remoteuser="root@"
-  [ $DEBUG ] && echoerr "checking remote shell"
+  [ $DEBUG ] && echoerr "checking remote shell for ${remoteuser}${rhost}"
   typeset rshell=$(ssh ${ssh_opts} ${remoteuser}${rhost} -C "command -v bash")
-  [ $? -eq 0 ] || typeset rshell=$(ssh ${remoteuser}${rhost} -C "command -v ksh")
+  [ -z "$rshell" ] && typeset rshell=$(ssh ${ssh_opts} ${remoteuser}${rhost} -C "command -v ksh")
   if [ -z "$rshell" ]; then
     echoerr "ERROR could not determine remote shell for host $rhost, skipping"
     return 1
