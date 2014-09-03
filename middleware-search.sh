@@ -83,7 +83,10 @@ function get_env {
       [ $(command_exists /bin/sed) -eq 0 ] && SED="/bin/sed"
       [ $(command_exists /usr/bin/host) -eq 0 ] && HOST="/usr/bin/host"
       [ $(command_exists /usr/bin/nslookup) -eq 0 ] && NSLOOKUP="/usr/bin/nslookup"
-
+      ;;
+    AIX)
+      OS="aix"
+      [ $(command_exists /usr/bin/ps) -eq 0 ] && PS="/usr/bin/ps axww"
       ;;
     *)
       OS="unknown"
@@ -170,7 +173,7 @@ function get_proc_env {
   if [ "$OS" = "solaris" ]; then
     typeset pvar=$(pargs -e -a $pid 2>/dev/null | $GREP "${var}" | $SED "s/.*${var}=\(.*\)$/\1/"; exit ${PIPESTATUS[0]})
   elif [ "$OS" = "linux" ]; then
-    typeset pvar=$(tr '\0' '\n' < /proc/$pid/environ | $GREP $var | $SED "s/.*${var}=\(.*\)$/\1/"; exit ${PIPESTATUS[0]})
+    typeset pvar=$(strings -a /proc/$pid/environ | $GREP $var | $SED "s/.*${var}=\(.*\)$/\1/"; exit ${PIPESTATUS[0]})
   fi
   ret=$?
   [ $TRACE ] && echoerr "TRACE get_proc_env - pvar: $pvar ret: $ret"
@@ -180,11 +183,14 @@ function get_proc_env {
 
 function get_proc_fullpath {
   typeset pid="$1"
+  typeset command="$2"
 
   if [ "$OS" = "solaris" ]; then
     typeset pcmd=$(pargs -l $pid 2>/dev/null | $AWK '{ print $1 }'; exit ${PIPESTATUS[0]})
   elif [ "$OS" = "linux" ]; then
     typeset pcmd=$(get_real_path "/proc/$pid/exe")
+  elif [ "$OS" = "aix" ]; then
+    typeset pcmd=$(svmon -P $pid -c -j | grep "/${command}" | sed "s|[\t ]*\(/.*/${command}\)[\t ]*|\1|g")
   fi
   ret=$?
   [ $TRACE ] && echoerr "TRACE get_proc_fullpath - pcmd: $pcmd ret: $ret"
@@ -244,7 +250,7 @@ function check_versions {
   fi
 
   if [ ! -f "$command" ]; then
-    typeset pcmd="$(get_proc_fullpath "$pid")"
+    typeset pcmd="$(get_proc_fullpath "$pid" "$command")"
     [ $DEBUG ] && echoerr "DEBUG check_versions - $command full path: $pcmd"
     if [ -f "$pcmd" ] && ! is_inprocfilter "$pcmd"; then
       command=$pcmd
