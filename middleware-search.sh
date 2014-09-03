@@ -30,8 +30,7 @@ GREP=${GREP:-"grep"}
 AWK=${AWK:-"awk"}
 SED=${SED:-"sed"}
 HOST=${HOST:-"host"}
-
-
+ID=${ID:-"id"}
 
 #------------------------- FUNCTIONS -------------------------------#
 function usage {
@@ -48,6 +47,8 @@ function usage {
                                   implies -r
   [-n | --numthreads]         ... number of threads               [default 1]
                                   only valid in combination with -f
+  [-s | --sudo]               ... use sudo to gain root
+                                  in remote execution mode        [default no]
   [-q | --quiet]              ... no unnecessary output           [default no]
                                   useful with in combination with -c and -f
   "
@@ -74,6 +75,7 @@ function get_env {
       [ $(command_exists /usr/sbin/host) -eq 0 ] && HOST="/usr/sbin/host"
       [ $(command_exists /usr/sbin/nslookup) -eq 0 ] && NSLOOKUP="/usr/sbin/nslookup"
       [ $(command_exists /usr/proc/bin/pfiles) -eq 0 ] && PFILES="/usr/proc/bin/pfiles"
+      [ $(command_exists /usr/xpg4/bin/id) -eq 0 ] && ID="/usr/xpg4/bin/id"
       ;;
     Linux)
       OS="linux"
@@ -94,6 +96,7 @@ function get_env {
   esac   
   HOSTNAME="$($HOST $(hostname) 2>/dev/null | $AWK '{ print $1 }')"
   [ -z "$HOSTNAME" ] &&  HOSTNAME="$($NSLOOKUP $(hostname) | $AWK '/Name:/ {print $2}')"
+  USER=$($ID -un)
 }
 
 function command_exists {
@@ -594,9 +597,11 @@ function exec_with_timeout {
 function ssh_exec {
   typeset rhost="$1"
   typeset remoteuser
+  typeset SUDO
 
   [ $(echo $rhost | $GREP -q "@"; echo $?) -ne 0 ] && remoteuser="root@"
   [ $DEBUG ] && echoerr "checking remote shell for ${remoteuser}${rhost}"
+  [ $USE_SUDO ] && [ "$(echo "${remoteuser}${rhost}" | awk -F"@" '{print $1}')" != "root" ] && SUDO="sudo"
   typeset rshell=$(ssh ${ssh_opts} ${remoteuser}${rhost} -C "command -v bash")
   [ -z "$rshell" ] && typeset rshell=$(ssh ${ssh_opts} ${remoteuser}${rhost} -C "command -v ksh")
   if [ -z "$rshell" ]; then
@@ -607,7 +612,7 @@ function ssh_exec {
     {
       printf '%s\n' "set -- $REMOTE_OPTS"
       cat "$MYSELF"
-    } | ssh ${ssh_opts} ${remoteuser}${rhost} "$rshell -s"
+    } | ssh ${ssh_opts} ${remoteuser}${rhost} "$SUDO $rshell -s"
   fi
 }
 
@@ -714,6 +719,10 @@ while :; do
       esac
       shift 2
       ;;
+    -s | --sudo)
+      USE_SUDO=true
+      shift
+      ;;
     --)
       shift
       break
@@ -740,7 +749,7 @@ else
   get_env
   echo "$procfilter" | tr ' ' '\n' > $proc_filter_file
   [ $BE_QUIET ] || echo '#--------------------------------------#'
-  [ $BE_QUIET ] || echo "# OS: $OS - hostname: $HOSTNAME #"
+  [ $BE_QUIET ] || echo "# OS: $OS - hostname: $HOSTNAME - id: $USER #"
 
   search_processes
   #search_packages
