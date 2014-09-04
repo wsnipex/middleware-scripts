@@ -89,6 +89,7 @@ function get_env {
     AIX)
       OS="aix"
       [ $(command_exists /usr/bin/ps) -eq 0 ] && PS="/usr/bin/ps axww"
+      [ $(command_exists lsof) -eq 0 ] && LSOF=$(command -v lsof)
       ;;
     *)
       OS="unknown"
@@ -517,6 +518,11 @@ function get_proc_tcpports {
     ;;
   linux)
     ips=$(netstat -anltp 2>/dev/null | $AWK "/LISTEN.*$pid/ {print \$4}"; exit ${PIPESTATUS[0]})
+    ret=$?
+    ;;
+  aix)
+    [ -z "$LSOF" ] && ips="N/A" && return 1
+    ips=$($LSOF -iTCP -a -n -P -p $pid | grep LISTEN | awk '{print $9}' | tr '\n' ' ')
     ret=$?
     ;;
   *)
