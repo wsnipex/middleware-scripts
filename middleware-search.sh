@@ -463,6 +463,7 @@ function search_processes {
     [ "$p" == "C:D" ] && e='|cdpmgr|cdstatm'
     [ "$p" == "MQ" ] && e='xxxx|runmqlsr|amq[cfhlprxz]|amqr|runmq'
     [ "$p" == "python" ] && ef="|java"
+    [ "$p" == "perl" ] && ef="|perldtn"
 
     typeset t=$($PS | $GREP -iE "${p}${e}" | $GREP -vE "${f}${ef}" | $AWK '{ print $1"@"$5 }')
     [ ${SHOW_PROCS} ] && echo "PROCESSES ${p}: $t"
