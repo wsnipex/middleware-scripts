@@ -178,6 +178,8 @@ function get_proc_env {
     typeset pvar=$(pargs -e -a $pid 2>/dev/null | $GREP "${var}" | $SED "s/.*${var}=\(.*\)$/\1/"; exit ${PIPESTATUS[0]})
   elif [ "$OS" = "linux" ]; then
     typeset pvar=$(strings -a /proc/$pid/environ | $GREP $var | $SED "s/.*${var}=\(.*\)$/\1/"; exit ${PIPESTATUS[0]})
+  elif [ "$OS" = "aix" ]; then
+    typeset pvar=$(ps eww $pid | tr ' ' "\n" | $GREP $var | $SED "s/.*${var}=\(.*\)$/\1/")
   fi
   ret=$?
   [ $TRACE ] && echoerr "TRACE get_proc_env - pvar: $pvar ret: $ret"
