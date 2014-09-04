@@ -118,7 +118,7 @@ function is_inarray {
 
 function sort_array {
   typeset e
-  sorted=$(for e in $*; do echo "${e}${output_valueseparator}"; done | sort)
+  sorted=$(for e in $*; do echo "${e}${output_valueseparator}"; done | sort -u)
   echo $sorted
 }
 
@@ -456,7 +456,7 @@ function search_processes {
   [ $BE_QUIET ] || echo '#---- checking versions --------------#'
   [ ${SHOW_PROCS} ] && echo '#---- checking running processes ----#'
   for p in $searchprocs ; do
-    [ "$p" == "apache" ] && ef='|org.apache|java'
+    [ "$p" == "apache" ] && ef='|org.apache|java|rotatelogs'
     [ "$p" == "tomcat" ] && ef='|astro'
     [ "$p" == "jboss" ] && ef='|jbossall-client|astro'
     [ "$p" == "websphere" ] && ef='|InformationServer'
@@ -525,7 +525,7 @@ function get_proc_tcpports {
     ;;
   aix)
     [ -z "$LSOF" ] && ips="N/A" && return 1
-    ips=$($LSOF -iTCP -a -n -P -p $pid | grep LISTEN | awk '{print $9}' | tr '\n' ' ')
+    ips=$($LSOF -iTCP -a -n -P -p $pid | grep LISTEN | $AWK '{print $9}' | sort -u | tr '\n' ' ')
     ret=$?
     ;;
   *)
