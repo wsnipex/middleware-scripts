@@ -277,7 +277,7 @@ function check_versions {
         typeset output=$(${command} -version 2>&1 | head -1 | cut -d " " -f 3- | tr -d \"; exit ${PIPESTATUS[0]})
         typeset ret=$?
         if ! check_return_code "$command" "$ret" "$output"; then return 1; fi
-        echo "$output" | $GREP -Eq "[0-9\.]{3}_" || return 1
+        echo "$output" | $GREP -Eq "[0-9\.]{3}" || return 1
         set_newest_java "$command" "$output"
       else
         set_procfilter "$command"
