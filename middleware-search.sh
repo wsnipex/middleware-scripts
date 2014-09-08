@@ -329,7 +329,8 @@ function check_versions {
         typeset tomcat_command="CATALINA_HOME=${catalina_home} JAVA_HOME=${java_home} sh ${catalina_home}/bin/catalina.sh version"
       elif [ $(echo ${catalina_home} | $GREP -Eq "^/usr/share/"; echo $?) -eq 0 ]; then
         typeset tomcat_tmp=$(echo ${catalina_home} | $SED 's|^/usr/share/||g')
-        [ $(command_exists $tomcat_tmp) -eq 0 ] && typeset tomcat_command="sh ${tomcat_tmp} version"
+        [ $(command_exists $tomcat_tmp) -eq 0 ] && typeset tomcat_command="CATALINA_HOME=${catalina_home} JAVA_HOME=${java_home} sh ${tomcat_tmp} version"
+        [ $(command_exists /usr/bin/dtomcat5) -eq 0 ] && typeset tomcat_command="CATALINA_HOME=${catalina_home} JAVA_HOME=${java_home} sh /usr/bin/dtomcat5 version"
       fi
       typeset output=$(eval ${tomcat_command} | $GREP -iE "version.*tomcat|^Server number" | $SED -e 's/.*\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/' -e 's/[^0-9\.]//g' -e '/^$/d' | head -1 ; exit ${PIPESTATUS[0]})
       typeset ret=$?
