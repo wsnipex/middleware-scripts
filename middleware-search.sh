@@ -459,6 +459,7 @@ function search_processes {
   [ ${SHOW_PROCS} ] && echo '#---- checking running processes ----#'
   for p in $searchprocs ; do
     [ "$p" == "apache" ] && ef='|org.apache|java|rotatelogs'
+    [ "$p" == "java" ] && ef='|tnameserv'
     [ "$p" == "tomcat" ] && ef='|astro'
     [ "$p" == "jboss" ] && ef='|jbossall-client|astro'
     [ "$p" == "websphere" ] && ef='|InformationServer'
