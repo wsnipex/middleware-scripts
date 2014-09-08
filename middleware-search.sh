@@ -95,9 +95,9 @@ function get_env {
       OS="unknown"
       ;;
   esac   
-  HOSTNAME="$($HOST $(hostname) 2>/dev/null | $AWK '{ print $1 }')"
-  [ -z "$HOSTNAME" ] &&  HOSTNAME="$($NSLOOKUP $(hostname) 2>/dev/null | $AWK '/Name:/ {print $2}')"
-  [ -z "$HOSTNAME" ] &&  HOSTNAME="$(hostname)"
+  $HOST $(hostname) >/dev/null 2>&1 && HOSTNAME="$($HOST $(hostname) | $AWK '{ print $1 }')"
+  [ -z "$HOSTNAME" ] && HOSTNAME="$($NSLOOKUP $(hostname) 2>/dev/null | $AWK '/Name:/ {print $2}')"
+  ([ -z "$HOSTNAME" ] || [ "$HOSTNAME" = "Host" ]) && HOSTNAME="$(hostname)"
   USER=$($ID -un)
 }
 
