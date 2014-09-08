@@ -17,7 +17,7 @@ searchprocs="apache httpd java tomcat jboss websphere C:D MQ python perl php"
 searchpkgs="apache apache2 java tomcat jboss python perl php"
 searchdirs="/opt /etc /export"
 fskeywords="[aA]pache java [tT]omcat [jJ][bB]oss"
-procfilter="bash /bin/sh tail ssh LLAWP javasrv snoop tcpdump less more vi gzip grep rsync"
+procfilter="bash /bin/sh tail ssh LLAWP javasrv snoop tcpdump less more vi gzip grep rsync tnameserv ARCHIVELOGS"
 output_fieldseparator=';'
 output_valueseparator=' '
 java_tmpfile="/tmp/${$}.java"
@@ -333,7 +333,7 @@ function check_versions {
         [ $(command_exists $tomcat_tmp) -eq 0 ] && typeset tomcat_command="CATALINA_HOME=${catalina_home} JAVA_HOME=${java_home} sh ${tomcat_tmp} version"
         [ $(command_exists /usr/bin/dtomcat5) -eq 0 ] && typeset tomcat_command="CATALINA_HOME=${catalina_home} JAVA_HOME=${java_home} sh /usr/bin/dtomcat5 version"
       fi
-      typeset output=$(eval ${tomcat_command} | $GREP -iE "version.*tomcat|^Server number" | $SED -e 's/.*\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/' -e 's/[^0-9\.]//g' -e '/^$/d' | head -1 ; exit ${PIPESTATUS[0]})
+      typeset output=$(eval ${tomcat_command} | $GREP -iE "version.*tomcat|^Server number" | $SED -e 's/.* \([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/' -e 's/[^0-9\.]//g' -e '/^$/d' | head -1 ; exit ${PIPESTATUS[0]})
       typeset ret=$?
       [ $TRACE ] && echoerr "TRACE tomcat_command: $tomcat_command OUT: $output Ret: $?"
       if ! check_return_code "$tomcat_command" "$ret" "$output" || [ -z "$output" ]; then
@@ -347,7 +347,7 @@ function check_versions {
           [ -z "$output" ] && output="$(echo ${catalina_home} | $SED -e 's/.*\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/' | $GREP -E "^[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,3}"; exit ${PIPESTATUS[2]})*" && typeset ret=$?
         fi
       fi
-      if ! check_return_code "$tomcat_command" "$ret" "$output"; then set_procfilter "$command"; return 1; fi
+      if ! echo "$output" | $GREP -Eq "[0-9\.]{3}" || ! check_return_code "$tomcat_command" "$ret" "$output"; then set_procfilter "$command"; return 1; fi
       ;;
     jboss)
       typeset java_home=$(get_proc_env "$pid" "JAVA_HOME")
