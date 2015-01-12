@@ -76,6 +76,8 @@ function get_env {
       [ $(command_exists /usr/sbin/nslookup) -eq 0 ] && NSLOOKUP="/usr/sbin/nslookup"
       [ $(command_exists /usr/proc/bin/pfiles) -eq 0 ] && PFILES="/usr/proc/bin/pfiles"
       [ $(command_exists /usr/xpg4/bin/id) -eq 0 ] && ID="/usr/xpg4/bin/id"
+
+      EXTRA_LIB_PATH="/usr/sfw/lib"
       ;;
     Linux)
       OS="linux"
@@ -272,7 +274,7 @@ function check_versions {
   case $process in
     apache|httpd)
       typeset ap_ld_path=$(dirname $command)/../lib
-      [ -x $command ] && output=$(LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH ${command} -v 2>&1 | cut -d " " -f 3 | $SED 's|Apache/||' ; exit ${PIPESTATUS[0]})
+      [ -x $command ] && output=$(LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH:${EXTRA_LIB_PATH} ${command} -v 2>&1 | cut -d " " -f 3 | $SED 's|Apache/||' ; exit ${PIPESTATUS[0]})
       check_return_code "$command" "$?" "$output"
       ;;
     java)
