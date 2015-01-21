@@ -484,6 +484,7 @@ function search_processes {
         t="$(check_versions $p $r)"
         if ! is_inarray "$t" "${output}"; then
           typeset output=""${output}" "${t}""
+          [ ${CMDB} ] && [ -n "${t}" ] && echo -n "${HOSTNAME}${output_fieldseparator}${p}${output_fieldseparator}${t}" && typeset cout="true"
         fi
       fi
       if [ $SHOW_IPS ] && [ "$p" != "java" ] && ! is_inarray "${pid}" "${duplicates_net}"; then
@@ -493,23 +494,29 @@ function search_processes {
         if ! is_inarray "$n" "${net}"; then
           typeset net=""${net}" "${n}""
         fi
+      else
+        [ ${CMDB} ] && [ ${cout} ] && echo "" && unset cout
       fi
       unset pid c
     done
     unset r t n
 
-    [ $SHOW_IPS ] && typeset ips_out="${output_fieldseparator}$(sort_array "${net}")"
-    if [ $CSV_OUTPUT ]; then
-      typeset csv="$(sort_array "${output}")"${ips_out}""
-      typeset csv_out="${csv_out}${output_fieldseparator}${csv}"
-    else
-      echo "${p}${output_fieldseparator}$(sort_array "${output}")"${ips_out}"" | $SED 's/[()]//g'
+    if [ "${CMDB}" != "true" ]; then
+      [ $SHOW_IPS ] && typeset ips_out="${output_fieldseparator}$(sort_array "${net}")"
+      if [ $CSV_OUTPUT ]; then
+        typeset csv="$(sort_array "${output}")"${ips_out}""
+        typeset csv_out="${csv_out}${output_fieldseparator}${csv}"
+      else
+        echo "${p}${output_fieldseparator}$(sort_array "${output}")"${ips_out}"" | $SED 's/[()]//g'
+      fi
+      unset output net subres r t p
     fi
-    unset output net subres r t p
   done
-  [ $CSV_OUTPUT ] && [ ! $BE_QUIET ] && echo "$(get_csv_header)"
-  [ $CSV_OUTPUT ] && echo "${HOSTNAME}${output_fieldseparator}${OS}${csv_out}" | $SED 's/[()]//g'
-  [ $BE_QUIET ] || echo '#------------------------------------#'
+  if [ "${CMDB}" != "true" ]; then
+    [ $CSV_OUTPUT ] && [ ! $BE_QUIET ] && echo "$(get_csv_header)"
+    [ $CSV_OUTPUT ] && echo "${HOSTNAME}${output_fieldseparator}${OS}${csv_out}" | $SED 's/[()]//g'
+    [ $BE_QUIET ] || echo '#------------------------------------#'
+  fi
   unset p
 }
 
@@ -736,6 +743,11 @@ while :; do
       ;;
     -s | --sudo)
       USE_SUDO=true
+      shift
+      ;;
+    -I | --inventory)
+      CMDB=true
+      REMOTE_OPTS="$REMOTE_OPTS -I"
       shift
       ;;
     --)
