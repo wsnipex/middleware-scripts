@@ -383,8 +383,14 @@ function check_versions {
       typeset jboss_command="sh ${jboss_home}/bin/run.sh -V JBOSS_HOME=${jboss_home} JAVA_HOME=${java_home}"
       if [ -f ${jboss_home}/bin/run.sh ]; then
         typeset jb_out=$(exec_with_timeout "${jboss_command}")
-        typeset output="$(echo $jb_out | tr ' ' "\n" | $SED -n '/^\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/p')"
-        if ! check_return_code "$jboss_command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
+        typeset output="$(echo $jb_out | tr ' ' "\n" | $SED -n '/^\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/p'; exit ${PIPESTATUS[2]})"
+        typeset ret=$?
+        if [ -z "${output}" ]; then
+          output="$(echo $jb_out | $GREP JBOSS_HOME | $SED 's/.*\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/'; exit ${PIPESTATUS[2]})"
+          typeset ret=$?
+        fi
+        [ $TRACE ] && echoerr "TRACE JBOSS_VERSION ${output}"
+        if ! check_return_code "$jboss_command" "$ret" "$output"; then set_procfilter "$command";  return 1; fi
       else
         typeset jb_tmp=$(get_real_path ${jboss_home})
         jboss_home="$(echo $jb_tmp | $SED 's|^\(.*[jJ][bB]oss-[0-9].[0-9].[0-9][\.A-Z]*/\).*$|\1|g')"
@@ -478,14 +484,15 @@ function search_processes {
     for r in ${t} ; do
       typeset pid=$(echo $r | $AWK -F"@" '{ print $1 }')
       typeset c=$(echo $r | $AWK -F"@" '{ print $2 }')
-      if ([ "$p" = "apache" ] || [ "$p" = "httpd" ] || [ "$p" = "java" ] ) && is_inarray "${c}" "${duplicates_proc}"; then : ; else
+      [ $TRACE ] && echoerr "pid: $pid c=$c"
+      if (([ "$p" = "apache" ] || [ "$p" = "httpd" ] || [ "$p" = "java" ]) && is_inarray "${c}" "${duplicates_proc}") && [ "${CMDB}" != "true" ]; then : ; else
         duplicates_proc="${duplicates_proc} ${c}"
         [ ${DEBUG} ] && echoerr "PROCCHECK: $p $r"
         t="$(check_versions $p $r)"
         if ! is_inarray "$t" "${output}"; then
           typeset output=""${output}" "${t}""
-          [ ${CMDB} ] && [ -n "${t}" ] && echo -n "${HOSTNAME}${output_fieldseparator}${p}${output_fieldseparator}${t}" && typeset cout="true"
         fi
+          [ ${CMDB} ] && [ -n "${t}" ] && typeset cmdbout="${HOSTNAME}${output_fieldseparator}${p}${output_fieldseparator}${t}${output_fieldseparator}" && typeset cout="true"
       fi
       if [ $SHOW_IPS ] && [ "$p" != "java" ] && ! is_inarray "${pid}" "${duplicates_net}"; then
         duplicates_net=""${duplicates_net}" "${pid}""
@@ -493,9 +500,8 @@ function search_processes {
         typeset n="$(get_proc_tcpports $pid)"
         if ! is_inarray "$n" "${net}"; then
           typeset net=""${net}" "${n}""
+          [ ${CMDB} ] && [ -n "${n}" ] && echo "${cmdbout}${n}${output_fieldseparator}" && unset cout
         fi
-      else
-        [ ${CMDB} ] && [ ${cout} ] && echo "" && unset cout
       fi
       unset pid c
     done
@@ -509,8 +515,8 @@ function search_processes {
       else
         echo "${p}${output_fieldseparator}$(sort_array "${output}")"${ips_out}"" | $SED 's/[()]//g'
       fi
-      unset output net subres r t p
     fi
+    unset output net subres r t p
   done
   if [ "${CMDB}" != "true" ]; then
     [ $CSV_OUTPUT ] && [ ! $BE_QUIET ] && echo "$(get_csv_header)"
@@ -533,7 +539,7 @@ function get_proc_tcpports {
     echo "$ips" | $GREP -Eq "([0-9]{1,3}\.){3}[0-9]{1,3}" || ret=1
     ;;
   linux)
-    ips=$(netstat -anltp 2>/dev/null | $AWK "/LISTEN.*$pid/ {print \$4}"; exit ${PIPESTATUS[0]})
+    ips=$(netstat -anltp 2>/dev/null | $AWK "/LISTEN.*$pid/ {print \$4}" | tr '\n' ' '; exit ${PIPESTATUS[0]})
     ret=$?
     ;;
   aix)
