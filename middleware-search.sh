@@ -41,6 +41,7 @@ function usage {
   [-d | --debug]              ... enable debug output, implies -p [default no]
   [-t | --trace]              ... enable trace output, implies -d [default no]
   [-c | --csv]                ... enable CSV output               [default no]
+  [-I | --inventory]          ... enable inventory output format  [default no]
   [-r | --remote] [user@]host ... enable remote execution via ssh [default no]
   [-f | --file] filename [-n] ... read [user@]remotehost from file.
                                   format: 1 line per host
@@ -492,7 +493,7 @@ function search_processes {
         if ! is_inarray "$t" "${output}"; then
           typeset output=""${output}" "${t}""
         fi
-          [ ${CMDB} ] && [ -n "${t}" ] && typeset cmdbout="${HOSTNAME}${output_fieldseparator}${p}${output_fieldseparator}${t}${output_fieldseparator}" && typeset cout="true"
+        [ ${CMDB} ] && [ -n "${t}" ] && typeset cmdbout="${HOSTNAME}${output_fieldseparator}${p}${output_fieldseparator}${t}${output_fieldseparator}${c}${output_fieldseparator}"
       fi
       if [ $SHOW_IPS ] && [ "$p" != "java" ] && ! is_inarray "${pid}" "${duplicates_net}"; then
         duplicates_net=""${duplicates_net}" "${pid}""
@@ -500,10 +501,10 @@ function search_processes {
         typeset n="$(get_proc_tcpports $pid)"
         if ! is_inarray "$n" "${net}"; then
           typeset net=""${net}" "${n}""
-          [ ${CMDB} ] && [ -n "${n}" ] && echo "${cmdbout}${n}${output_fieldseparator}" && unset cout
+          [ ${CMDB} ] && [ -n "${n}" ] && echo "${cmdbout}${n}${output_fieldseparator}"
         fi
       fi
-      unset pid c
+      unset pid c cmdbout
     done
     unset r t n
 
