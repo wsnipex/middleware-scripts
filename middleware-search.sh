@@ -179,16 +179,25 @@ function get_proc_env {
   typeset var="$2"
 
   if [ "$OS" = "solaris" ]; then
-    typeset pvar=$(pargs -e -a $pid 2>/dev/null | $GREP "${var}" | $SED "s/.*${var}=\(.*\)$/\1/"; exit ${PIPESTATUS[0]})
+    typeset pvar=$(pargs -e -a $pid 2>/dev/null | $GREP " ${var}=" | $SED "s/.*${var}=\(.*\)$/\1/"; exit ${PIPESTATUS[0]})
   elif [ "$OS" = "linux" ]; then
-    typeset pvar=$(strings -a /proc/$pid/environ | $GREP $var | $SED "s/.*${var}=\(.*\)$/\1/"; exit ${PIPESTATUS[0]})
+    typeset pvar=$(strings -a /proc/$pid/environ | $GREP "^${var}=" | $SED "s/.*${var}=\(.*\)$/\1/"; exit ${PIPESTATUS[0]})
   elif [ "$OS" = "aix" ]; then
-    typeset pvar=$(ps eww $pid | tr ' ' "\n" | $GREP $var | $SED "s/.*${var}=\(.*\)$/\1/")
+    typeset pvar=$(ps eww $pid | tr ' ' "\n" | $GREP "${var}" | $SED "s/.*${var}=\(.*\)$/\1/")
   fi
   ret=$?
   [ $TRACE ] && echoerr "TRACE get_proc_env - pvar: $pvar ret: $ret"
   echo "${pvar}"
   return $ret
+}
+
+function get_runtime_user {
+  typeset pid="$1"
+
+  typeset rtuser=$(get_proc_env "$pid" "USERNAME")
+  [ -z "${rtuser}" ] && rtuser=$(get_proc_env "$pid" "USER")
+  [ -z "${rtuser}" ] && rtuser=$(${PS}u | $GREP "$pid" | $GREP -v grep | $AWK '{print $1}')
+  echo "${rtuser}"
 }
 
 function get_proc_fullpath {
@@ -501,7 +510,7 @@ function search_processes {
         typeset n="$(get_proc_tcpports $pid)"
         if ! is_inarray "$n" "${net}"; then
           typeset net=""${net}" "${n}""
-          [ ${CMDB} ] && [ -n "${n}" ] && echo "${cmdbout}${n}${output_fieldseparator}"
+          [ ${CMDB} ] && [ -n "${n}" ] && echo "${cmdbout}$(get_runtime_user "$pid")${output_fieldseparator}${n}${output_fieldseparator}"
         fi
       fi
       unset pid c cmdbout
@@ -754,7 +763,7 @@ while :; do
       ;;
     -I | --inventory)
       CMDB=true
-      REMOTE_OPTS="$REMOTE_OPTS -I"
+      REMOTE_OPTS="$REMOTE_OPTS -I -i -q"
       shift
       ;;
     --)
