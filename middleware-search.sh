@@ -426,7 +426,11 @@ function check_versions {
       ;;
     C:D)
       if [ $($GREP -q cduser /etc/passwd; echo $?) -eq 0 ]; then
-        typeset output=$(su - cduser -c 'direct << "EOF quit; EOF"' | $GREP -E "Version|Connect:Direct" | $SED 's/.* \([0-9\.]\)/\1/' | cut -d " " -f1 | $GREP -E "[0-9\.]{3}")
+        typeset output=$(su - cduser -c 'direct << "EOF quit; EOF" 2>/dev/null' | $GREP -E "Version|Connect:Direct" | $SED 's/.* \([0-9\.]\)/\1/' | cut -d " " -f1 | $GREP -E "[0-9\.]{3}")
+        if [ -z "$output" ]; then
+          typeset directcmd=$(su - cduser -c ". .profile ; /usr/bin/command -v direct")
+          typeset output=$(su - cduser -c "echo 'quit;' | ${directcmd} 2>/dev/null" | $GREP -E "Version|Connect:Direct" | $SED 's/.* \([0-9\.]\)/\1/' | cut -d " " -f1 | $GREP -E "[0-9\.]{3}")
+        fi
         if ! check_return_code "$command" "$?" "$output"; then return 1; fi
       else
         echoerr "ERROR - C:D procs running, but cduser not found"
