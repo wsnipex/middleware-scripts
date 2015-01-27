@@ -194,9 +194,13 @@ function get_proc_env {
 function get_runtime_user {
   typeset pid="$1"
 
-  typeset rtuser=$(get_proc_env "$pid" "USERNAME")
-  [ -z "${rtuser}" ] && rtuser=$(get_proc_env "$pid" "USER")
-  [ -z "${rtuser}" ] && rtuser=$(${PS}u | $GREP "$pid" | $GREP -v grep | $AWK '{print $1}')
+  if [ "$OS" = "aix" ]; then
+    typeset rtuser=$(/usr/bin/ps -p $pid -o user= | tr -d " ")
+  else
+    typeset rtuser=$(get_proc_env "$pid" "USERNAME")
+    [ -z "${rtuser}" ] && rtuser=$(get_proc_env "$pid" "USER")
+    [ -z "${rtuser}" ] && rtuser=$(${PS}u | $GREP "$pid" | $GREP -v grep | $AWK '{print $1}')
+  fi
   echo "${rtuser}"
 }
 
