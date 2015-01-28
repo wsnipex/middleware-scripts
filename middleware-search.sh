@@ -523,7 +523,7 @@ function search_processes {
         typeset n="$(get_proc_tcpports $pid)"
         if ! is_inarray "$n" "${net}"; then
           typeset net=""${net}" "${n}""
-          [ ${CMDB} ] && [ -n "${n}" ] && echo "${cmdbout}$(get_runtime_user "$pid")${output_fieldseparator}${n}${output_fieldseparator}"
+          [ ${CMDB} ] && [ -n "${n}" ] && ! $(is_inprocfilter "$c") && echo "${cmdbout}$(get_runtime_user "$pid")${output_fieldseparator}${n}${output_fieldseparator}"
         fi
       fi
       unset pid c cmdbout
