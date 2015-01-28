@@ -260,6 +260,10 @@ function get_csv_header {
   echo "${csv_header}"
 }
 
+function get_cmdb_header {
+  echo "Hostname${output_fieldseparator}Component${output_fieldseparator}Version${output_fieldseparator}Binary Path${output_fieldseparator}Username${output_fieldseparator}Listen IPs"
+}
+
 function check_versions {
   typeset process=$1
   typeset input=$2
@@ -483,6 +487,7 @@ function search_processes {
 
   [ $BE_QUIET ] || echo '#---- checking versions --------------#'
   [ ${SHOW_PROCS} ] && echo '#---- checking running processes ----#'
+  [ ${CMDB} ] && echo "$(get_cmdb_header)"
   for p in $searchprocs ; do
     [ "$p" == "apache" ] && ef='|org.apache|java|rotatelogs'
     [ "$p" == "java" ] && ef='|tnameserv'
