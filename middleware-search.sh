@@ -17,7 +17,7 @@ searchprocs="apache httpd java tomcat jboss websphere C:D MQ python perl php"
 searchpkgs="apache apache2 java tomcat jboss python perl php"
 searchdirs="/opt /etc /export"
 fskeywords="[aA]pache java [tT]omcat [jJ][bB]oss"
-procfilter="bash /bin/sh tail ssh LLAWP javasrv snoop tcpdump less more vi gzip grep rsync tnameserv ARCHIVELOGS"
+procfilter="bash /bin/sh tail ssh LLAWP javasrv snoop tcpdump less more vi gzip grep rsync tnameserv ARCHIVELOGS InformationServer"
 output_fieldseparator=';'
 output_valueseparator=' '
 java_tmpfile="/tmp/${$}.java"
@@ -217,6 +217,7 @@ function get_proc_fullpath {
   fi
   ret=$?
   [ $TRACE ] && echoerr "TRACE get_proc_fullpath - pcmd: $pcmd ret: $ret"
+
   if [ -f "${pcmd}" ] && [ $ret -eq 0 ]; then
     echo "${pcmd}"
     return 0
@@ -453,6 +454,7 @@ function check_versions {
       fi
       ;;
     python)
+      $command -V 2>/dev/null || return 1
       typeset output=$($command -V 2>&1 | $AWK '{ print $2 }')
       if ! check_return_code "$command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
       ;;
@@ -523,7 +525,7 @@ function search_processes {
         typeset n="$(get_proc_tcpports $pid)"
         if ! is_inarray "$n" "${net}"; then
           typeset net=""${net}" "${n}""
-          [ ${CMDB} ] && [ -n "${n}" ] && ! $(is_inprocfilter "$c") && echo "${cmdbout}$(get_runtime_user "$pid")${output_fieldseparator}${n}${output_fieldseparator}"
+          [ ${CMDB} ] && [ -n "${t}" ] && [ -n "${n}" ] && ! $(is_inprocfilter "$c") && echo "${cmdbout}$(get_runtime_user "$pid")${output_fieldseparator}${n}${output_fieldseparator}"
         fi
       fi
       unset pid c cmdbout
