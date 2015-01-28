@@ -199,7 +199,7 @@ function get_runtime_user {
   else
     typeset rtuser=$(get_proc_env "$pid" "USERNAME")
     [ -z "${rtuser}" ] && rtuser=$(get_proc_env "$pid" "USER")
-    [ -z "${rtuser}" ] && rtuser=$(${PS}u | $GREP "$pid" | $GREP -v grep | $AWK '{print $1}')
+    [ -z "${rtuser}" ] && rtuser=$(${PS}u | $GREP "$pid" | $AWK -v pid=$pid '{ if ($2 == pid) print $1 }')
   fi
   echo ${rtuser} | tr -d "\n"
 }
