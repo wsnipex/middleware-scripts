@@ -291,7 +291,7 @@ function check_versions {
 
   case $process in
     apache|httpd)
-      typeset ap_ld_path=$(dirname $command)/../lib
+      typeset ap_ld_path="$(dirname $command)/../lib:$(get_proc_env "$pid" "LD_LIBRARY_PATH")"
       [ -x $command ] && output=$(LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH:${EXTRA_LIB_PATH} ${command} -v 2>&1 | cut -d " " -f 3 | $SED 's|Apache/||' ; exit ${PIPESTATUS[0]})
       check_return_code "$command" "$?" "$output"
       ;;
@@ -487,7 +487,7 @@ function search_processes {
 
   [ $BE_QUIET ] || echo '#---- checking versions --------------#'
   [ ${SHOW_PROCS} ] && echo '#---- checking running processes ----#'
-  [ ${CMDB} ] && echo "$(get_cmdb_header)"
+  #[ ${CMDB} ] && echo "$(get_cmdb_header)"
   for p in $searchprocs ; do
     [ "$p" == "apache" ] && ef='|org.apache|java|rotatelogs'
     [ "$p" == "java" ] && ef='|tnameserv'
