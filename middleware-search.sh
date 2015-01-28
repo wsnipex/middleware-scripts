@@ -201,7 +201,7 @@ function get_runtime_user {
     [ -z "${rtuser}" ] && rtuser=$(get_proc_env "$pid" "USER")
     [ -z "${rtuser}" ] && rtuser=$(${PS}u | $GREP "$pid" | $GREP -v grep | $AWK '{print $1}')
   fi
-  echo "${rtuser}"
+  echo ${rtuser} | tr -d "\n"
 }
 
 function get_proc_fullpath {
