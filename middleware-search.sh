@@ -262,7 +262,7 @@ function get_csv_header {
 }
 
 function get_cmdb_header {
-  echo "Hostname${output_fieldseparator}Component${output_fieldseparator}Version${output_fieldseparator}Binary Path${output_fieldseparator}Username${output_fieldseparator}Listen IPs"
+  echo "Hostname${output_fieldseparator}OS${output_fieldseparator}Component${output_fieldseparator}Version${output_fieldseparator}Binary Path${output_fieldseparator}Username${output_fieldseparator}Listen IPs"
 }
 
 function check_versions {
@@ -489,7 +489,6 @@ function search_processes {
 
   [ $BE_QUIET ] || echo '#---- checking versions --------------#'
   [ ${SHOW_PROCS} ] && echo '#---- checking running processes ----#'
-  #[ ${CMDB} ] && echo "$(get_cmdb_header)"
   for p in $searchprocs ; do
     [ "$p" == "apache" ] && ef='|org.apache|java|rotatelogs'
     [ "$p" == "java" ] && ef='|tnameserv'
@@ -517,7 +516,7 @@ function search_processes {
         if ! is_inarray "$t" "${output}"; then
           typeset output=""${output}" "${t}""
         fi
-        [ ${CMDB} ] && [ -n "${t}" ] && typeset cmdbout="${HOSTNAME}${output_fieldseparator}${p}${output_fieldseparator}${t}${output_fieldseparator}${c}${output_fieldseparator}"
+        [ ${CMDB} ] && [ -n "${t}" ] && typeset cmdbout="${HOSTNAME}${output_fieldseparator}${OS}${output_fieldseparator}${p}${output_fieldseparator}${t}${output_fieldseparator}${c}${output_fieldseparator}"
       fi
       if [ $SHOW_IPS ] && [ "$p" != "java" ] && ! is_inarray "${pid}" "${duplicates_net}"; then
         duplicates_net=""${duplicates_net}" "${pid}""
@@ -798,6 +797,7 @@ done
 trap exit_handler 1 2 6 15
 
 if [ $REMOTE_EXEC ]; then
+  [ ${CMDB} ] && echo "$(get_cmdb_header)"
   if [ $READ_RHFILE ]; then
     read_remotefile
   else
