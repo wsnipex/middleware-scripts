@@ -560,7 +560,7 @@ function get_proc_tcpports {
     check_zone "$pid" || return 1
     ips=$($PFILES $pid 2>/dev/null | $AWK '/sockname: AF_INET/ {x=$3;y=$5; getline; if($0 !~ /peername/ )  print x":"y }' | sort -u | $SED 's/0.0.0.0:0//g' | tr '\n' ' '; exit ${PIPESTATUS[0]})
     ret=$?
-    echo "$ips" | $GREP -Eq "([0-9]{1,3}\.){3}[0-9]{1,3}" || ret=1
+    echo "$ips" | $GREP -Eq "([0-9]{1,3}\.){3}[0-9]{1,3}|:::[0-9]{2,5}" || ret=1
     ;;
   linux)
     ips=$(netstat -anltp 2>/dev/null | $AWK "/LISTEN.*$pid/ {print \$4}" | tr '\n' ' '; exit ${PIPESTATUS[0]})
