@@ -13,7 +13,7 @@
 
 #----------------------- CONFIG ------------------------------------#
 
-searchprocs="apache httpd java tomcat jboss websphere C:D MQ python perl php"
+searchprocs="apache httpd java tomcat jboss websphere C:D MQ python perl php mysql"
 searchpkgs="apache apache2 java tomcat jboss python perl php"
 searchdirs="/opt /etc /export"
 fskeywords="[aA]pache java [tT]omcat [jJ][bB]oss"
@@ -465,7 +465,18 @@ function check_versions {
       if ! check_return_code "$command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
       ;;
     php)
-      typeset output=$($command -v | head -n 1 | sed 's/^PHP \([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/')
+      typeset output=$($command -v | head -n 1 | $SED 's/^PHP \([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/')
+      if ! check_return_code "$command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
+      ;;
+    mysql)
+      typeset mysql_admin="$(dirname $command)/mysqladmin"
+      [ $TRACE ] && echoerr "TRACE mysql_admin: ${mysql_admin}"
+      if [ ! -x $mysql_admin ]; then
+      [ $TRACE ] && echoerr "TRACE mysql_admin: ${mysql_admin} not executeable or does not exist"
+        command_exists mysqladmin >/dev/null 2>&1 && typeset mysql_admin="mysqladmin"
+      fi
+      [ $TRACE ] && echoerr "TRACE mysql_admin: ${mysql_admin}"
+      typeset output="$($mysql_admin -V | $SED -e 's/Distrib//' -e 's/.*\([0-9]\{1,3\}\.[0-9]\{1,3\} .*\), .*/\1/g' -e 's/[ ]\{1,3\}/_/'; exit ${PIPESTATUS[0]})"
       if ! check_return_code "$command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
       ;;
     *)
@@ -501,6 +512,7 @@ function search_processes {
     [ "$p" == "MQ" ] && e='xxxx|runmqlsr|amq[cfhlprxz]|amqr|runmq'
     [ "$p" == "python" ] && ef="|java"
     [ "$p" == "perl" ] && ef="|perldtn"
+    [ "$p" == "mysql" ] && e="d" && ef="_safe"
 
     typeset t=$($PS | $GREP -iE "${p}${e}" | $GREP -vE "${f}${ef}" | $AWK '{ print $1"@"$5 }')
     [ ${SHOW_PROCS} ] && echo "PROCESSES ${p}: $t"
