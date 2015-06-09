@@ -13,11 +13,11 @@
 
 #----------------------- CONFIG ------------------------------------#
 
-searchprocs="apache httpd java tomcat jboss websphere C:D MQ python perl php"
+searchprocs="apache httpd java tomcat jboss websphere C:D MQ python perl php mysql"
 searchpkgs="apache apache2 java tomcat jboss python perl php"
 searchdirs="/opt /etc /export"
 fskeywords="[aA]pache java [tT]omcat [jJ][bB]oss"
-procfilter="bash /bin/sh tail ssh LLAWP javasrv snoop tcpdump less more vi gzip grep rsync tnameserv ARCHIVELOGS"
+procfilter="bash /bin/sh tail ssh LLAWP javasrv snoop tcpdump less more vi gzip grep rsync tnameserv ARCHIVELOGS InformationServer"
 output_fieldseparator=';'
 output_valueseparator=' '
 java_tmpfile="/tmp/${$}.java"
@@ -36,11 +36,13 @@ ID=${ID:-"id"}
 function usage {
   echo "usage $(basename $0)
   [-h | --help]               ... this help
+  [-S | --searchprocs]        ... processes to search for         [default all]
   [-p | --procs]              ... show processes in output        [default no]
   [-i | --interfaces]         ... show tcp listen ips of processes[default no]
   [-d | --debug]              ... enable debug output, implies -p [default no]
   [-t | --trace]              ... enable trace output, implies -d [default no]
   [-c | --csv]                ... enable CSV output               [default no]
+  [-I | --inventory]          ... enable inventory output format  [default no]
   [-r | --remote] [user@]host ... enable remote execution via ssh [default no]
   [-f | --file] filename [-n] ... read [user@]remotehost from file.
                                   format: 1 line per host
@@ -178,16 +180,29 @@ function get_proc_env {
   typeset var="$2"
 
   if [ "$OS" = "solaris" ]; then
-    typeset pvar=$(pargs -e -a $pid 2>/dev/null | $GREP "${var}" | $SED "s/.*${var}=\(.*\)$/\1/"; exit ${PIPESTATUS[0]})
+    typeset pvar=$(pargs -e -a $pid 2>/dev/null | $GREP " ${var}=" | $SED "s/.*${var}=\(.*\)$/\1/"; exit ${PIPESTATUS[0]})
   elif [ "$OS" = "linux" ]; then
-    typeset pvar=$(strings -a /proc/$pid/environ | $GREP $var | $SED "s/.*${var}=\(.*\)$/\1/"; exit ${PIPESTATUS[0]})
+    typeset pvar=$(strings -a /proc/$pid/environ | $GREP "^${var}=" | $SED "s/.*${var}=\(.*\)$/\1/"; exit ${PIPESTATUS[0]})
   elif [ "$OS" = "aix" ]; then
-    typeset pvar=$(ps eww $pid | tr ' ' "\n" | $GREP $var | $SED "s/.*${var}=\(.*\)$/\1/")
+    typeset pvar=$(ps eww $pid | tr ' ' "\n" | $GREP "${var}" | $SED "s/.*${var}=\(.*\)$/\1/")
   fi
   ret=$?
   [ $TRACE ] && echoerr "TRACE get_proc_env - pvar: $pvar ret: $ret"
   echo "${pvar}"
   return $ret
+}
+
+function get_runtime_user {
+  typeset pid="$1"
+
+  if [ "$OS" = "aix" ]; then
+    typeset rtuser=$(/usr/bin/ps -p $pid -o user= | tr -d " ")
+  else
+    typeset rtuser=$(get_proc_env "$pid" "USERNAME")
+    [ -z "${rtuser}" ] && rtuser=$(get_proc_env "$pid" "USER")
+    [ -z "${rtuser}" ] && rtuser=$(${PS}u | $GREP "$pid" | $AWK -v pid=$pid '{ if ($2 == pid) print $1 }')
+  fi
+  echo ${rtuser} | tr -d "\n"
 }
 
 function get_proc_fullpath {
@@ -203,6 +218,7 @@ function get_proc_fullpath {
   fi
   ret=$?
   [ $TRACE ] && echoerr "TRACE get_proc_fullpath - pcmd: $pcmd ret: $ret"
+
   if [ -f "${pcmd}" ] && [ $ret -eq 0 ]; then
     echo "${pcmd}"
     return 0
@@ -246,6 +262,10 @@ function get_csv_header {
   echo "${csv_header}"
 }
 
+function get_cmdb_header {
+  echo "Hostname${output_fieldseparator}OS${output_fieldseparator}Component${output_fieldseparator}Version${output_fieldseparator}Binary Path${output_fieldseparator}Username${output_fieldseparator}Listen IPs"
+}
+
 function check_versions {
   typeset process=$1
   typeset input=$2
@@ -273,7 +293,7 @@ function check_versions {
 
   case $process in
     apache|httpd)
-      typeset ap_ld_path=$(dirname $command)/../lib
+      typeset ap_ld_path="$(dirname $command)/../lib:$(get_proc_env "$pid" "LD_LIBRARY_PATH")"
       [ -x $command ] && output=$(LD_LIBRARY_PATH=${ap_ld_path}:$LD_LIBRARY_PATH:${EXTRA_LIB_PATH} ${command} -v 2>&1 | cut -d " " -f 3 | $SED 's|Apache/||' ; exit ${PIPESTATUS[0]})
       check_return_code "$command" "$?" "$output"
       ;;
@@ -380,11 +400,18 @@ function check_versions {
           return 1
         fi
       fi
-      typeset jboss_command="sh ${jboss_home}/bin/run.sh -V JBOSS_HOME=${jboss_home} JAVA_HOME=${java_home}"
       if [ -f ${jboss_home}/bin/run.sh ]; then
+        typeset jboss_command="sh ${jboss_home}/bin/run.sh -V JBOSS_HOME=${jboss_home} JAVA_HOME=${java_home}"
+        [ -f ${jboss_home}/bin/standalone.sh ] && jboss_command="sh ${jboss_home}/bin/standalone.sh -V JBOSS_HOME=${jboss_home} JAVA_HOME=${java_home}"
         typeset jb_out=$(exec_with_timeout "${jboss_command}")
-        typeset output="$(echo $jb_out | tr ' ' "\n" | $SED -n '/^\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/p')"
-        if ! check_return_code "$jboss_command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
+        typeset output="$(echo $jb_out | tr ' ' "\n" | $SED -n '/^\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/p'; exit ${PIPESTATUS[2]})"
+        typeset ret=$?
+        if [ -z "${output}" ]; then
+          output="$(echo $jb_out | $GREP JBOSS_HOME | $SED 's/.*\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/'; exit ${PIPESTATUS[2]})"
+          typeset ret=$?
+        fi
+        [ $TRACE ] && echoerr "TRACE JBOSS_VERSION ${output}"
+        if ! check_return_code "$jboss_command" "$ret" "$output"; then set_procfilter "$command";  return 1; fi
       else
         typeset jb_tmp=$(get_real_path ${jboss_home})
         jboss_home="$(echo $jb_tmp | $SED 's|^\(.*[jJ][bB]oss-[0-9].[0-9].[0-9][\.A-Z]*/\).*$|\1|g')"
@@ -406,7 +433,11 @@ function check_versions {
       ;;
     C:D)
       if [ $($GREP -q cduser /etc/passwd; echo $?) -eq 0 ]; then
-        typeset output=$(su - cduser -c 'direct << "EOF quit; EOF"' | $GREP -E "Version|Connect:Direct" | $SED 's/.* \([0-9\.]\)/\1/' | cut -d " " -f1 | $GREP -E "[0-9\.]{3}")
+        typeset output=$(su - cduser -c 'direct << "EOF quit; EOF" 2>/dev/null' | $GREP -E "Version|Connect:Direct" | $SED 's/.* \([0-9\.]\)/\1/' | cut -d " " -f1 | $GREP -E "[0-9\.]{3}")
+        if [ -z "$output" ]; then
+          typeset directcmd=$(su - cduser -c ". .profile ; /usr/bin/command -v direct")
+          typeset output=$(su - cduser -c "echo 'quit;' | ${directcmd} 2>/dev/null" | $GREP -E "Version|Connect:Direct" | $SED 's/.* \([0-9\.]\)/\1/' | cut -d " " -f1 | $GREP -E "[0-9\.]{3}")
+        fi
         if ! check_return_code "$command" "$?" "$output"; then return 1; fi
       else
         echoerr "ERROR - C:D procs running, but cduser not found"
@@ -425,6 +456,7 @@ function check_versions {
       fi
       ;;
     python)
+      $command -V 2>/dev/null || return 1
       typeset output=$($command -V 2>&1 | $AWK '{ print $2 }')
       if ! check_return_code "$command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
       ;;
@@ -433,7 +465,18 @@ function check_versions {
       if ! check_return_code "$command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
       ;;
     php)
-      typeset output=$($command -v | head -n 1 | sed 's/^PHP \([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/')
+      typeset output=$($command -v | head -n 1 | $SED 's/^PHP \([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/')
+      if ! check_return_code "$command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
+      ;;
+    mysql)
+      typeset mysql_admin="$(dirname $command)/mysqladmin"
+      [ $TRACE ] && echoerr "TRACE mysql_admin: ${mysql_admin}"
+      if [ ! -x $mysql_admin ]; then
+      [ $TRACE ] && echoerr "TRACE mysql_admin: ${mysql_admin} not executeable or does not exist"
+        command_exists mysqladmin >/dev/null 2>&1 && typeset mysql_admin="mysqladmin"
+      fi
+      [ $TRACE ] && echoerr "TRACE mysql_admin: ${mysql_admin}"
+      typeset output="$($mysql_admin -V | $SED -e 's/Distrib//' -e 's/.*\([0-9]\{1,3\}\.[0-9]\{1,3\} .*\), .*/\1/g' -e 's/[ ]\{1,3\}/_/'; exit ${PIPESTATUS[0]})"
       if ! check_return_code "$command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
       ;;
     *)
@@ -469,6 +512,7 @@ function search_processes {
     [ "$p" == "MQ" ] && e='xxxx|runmqlsr|amq[cfhlprxz]|amqr|runmq'
     [ "$p" == "python" ] && ef="|java"
     [ "$p" == "perl" ] && ef="|perldtn"
+    [ "$p" == "mysql" ] && e="d" && ef="_safe"
 
     typeset t=$($PS | $GREP -iE "${p}${e}" | $GREP -vE "${f}${ef}" | $AWK '{ print $1"@"$5 }')
     [ ${SHOW_PROCS} ] && echo "PROCESSES ${p}: $t"
@@ -478,13 +522,15 @@ function search_processes {
     for r in ${t} ; do
       typeset pid=$(echo $r | $AWK -F"@" '{ print $1 }')
       typeset c=$(echo $r | $AWK -F"@" '{ print $2 }')
-      if ([ "$p" = "apache" ] || [ "$p" = "httpd" ] || [ "$p" = "java" ] ) && is_inarray "${c}" "${duplicates_proc}"; then : ; else
+      [ $TRACE ] && echoerr "pid: $pid c=$c"
+      if (([ "$p" = "apache" ] || [ "$p" = "httpd" ] || [ "$p" = "java" ]) && is_inarray "${c}" "${duplicates_proc}") && [ "${CMDB}" != "true" ]; then : ; else
         duplicates_proc="${duplicates_proc} ${c}"
         [ ${DEBUG} ] && echoerr "PROCCHECK: $p $r"
         t="$(check_versions $p $r)"
         if ! is_inarray "$t" "${output}"; then
           typeset output=""${output}" "${t}""
         fi
+        [ ${CMDB} ] && [ -n "${t}" ] && typeset cmdbout="${HOSTNAME}${output_fieldseparator}${OS}${output_fieldseparator}${p}${output_fieldseparator}${t}${output_fieldseparator}${c}${output_fieldseparator}"
       fi
       if [ $SHOW_IPS ] && [ "$p" != "java" ] && ! is_inarray "${pid}" "${duplicates_net}"; then
         duplicates_net=""${duplicates_net}" "${pid}""
@@ -492,24 +538,29 @@ function search_processes {
         typeset n="$(get_proc_tcpports $pid)"
         if ! is_inarray "$n" "${net}"; then
           typeset net=""${net}" "${n}""
+          [ ${CMDB} ] && [ -n "${t}" ] && [ -n "${n}" ] && ! $(is_inprocfilter "$c") && echo "${cmdbout}$(get_runtime_user "$pid")${output_fieldseparator}${n}${output_fieldseparator}"
         fi
       fi
-      unset pid c
+      unset pid c cmdbout
     done
     unset r t n
 
-    [ $SHOW_IPS ] && typeset ips_out="${output_fieldseparator}$(sort_array "${net}")"
-    if [ $CSV_OUTPUT ]; then
-      typeset csv="$(sort_array "${output}")"${ips_out}""
-      typeset csv_out="${csv_out}${output_fieldseparator}${csv}"
-    else
-      echo "${p}${output_fieldseparator}$(sort_array "${output}")"${ips_out}"" | $SED 's/[()]//g'
+    if [ "${CMDB}" != "true" ]; then
+      [ $SHOW_IPS ] && typeset ips_out="${output_fieldseparator}$(sort_array "${net}")"
+      if [ $CSV_OUTPUT ]; then
+        typeset csv="$(sort_array "${output}")"${ips_out}""
+        typeset csv_out="${csv_out}${output_fieldseparator}${csv}"
+      else
+        echo "${p}${output_fieldseparator}$(sort_array "${output}")"${ips_out}"" | $SED 's/[()]//g'
+      fi
     fi
     unset output net subres r t p
   done
-  [ $CSV_OUTPUT ] && [ ! $BE_QUIET ] && echo "$(get_csv_header)"
-  [ $CSV_OUTPUT ] && echo "${HOSTNAME}${output_fieldseparator}${OS}${csv_out}" | $SED 's/[()]//g'
-  [ $BE_QUIET ] || echo '#------------------------------------#'
+  if [ "${CMDB}" != "true" ]; then
+    [ $CSV_OUTPUT ] && [ ! $BE_QUIET ] && echo "$(get_csv_header)"
+    [ $CSV_OUTPUT ] && echo "${HOSTNAME}${output_fieldseparator}${OS}${csv_out}" | $SED 's/[()]//g'
+    [ $BE_QUIET ] || echo '#------------------------------------#'
+  fi
   unset p
 }
 
@@ -523,10 +574,10 @@ function get_proc_tcpports {
     check_zone "$pid" || return 1
     ips=$($PFILES $pid 2>/dev/null | $AWK '/sockname: AF_INET/ {x=$3;y=$5; getline; if($0 !~ /peername/ )  print x":"y }' | sort -u | $SED 's/0.0.0.0:0//g' | tr '\n' ' '; exit ${PIPESTATUS[0]})
     ret=$?
-    echo "$ips" | $GREP -Eq "([0-9]{1,3}\.){3}[0-9]{1,3}" || ret=1
+    echo "$ips" | $GREP -Eq "([0-9]{1,3}\.){3}[0-9]{1,3}|:::[0-9]{2,5}" || ret=1
     ;;
   linux)
-    ips=$(netstat -anltp 2>/dev/null | $AWK "/LISTEN.*$pid/ {print \$4}"; exit ${PIPESTATUS[0]})
+    ips=$(netstat -anltp 2>/dev/null | $AWK "/LISTEN.*$pid/ {print \$4}" | tr '\n' ' '; exit ${PIPESTATUS[0]})
     ret=$?
     ;;
   aix)
@@ -738,6 +789,16 @@ while :; do
       USE_SUDO=true
       shift
       ;;
+    -S | --searchprocs)
+      searchprocs=$2
+      shift 2
+      REMOTE_OPTS="$REMOTE_OPTS -S "$searchprocs""
+      ;;
+    -I | --inventory)
+      CMDB=true
+      REMOTE_OPTS="$REMOTE_OPTS -I -i -q"
+      shift
+      ;;
     --)
       shift
       break
@@ -755,6 +816,7 @@ done
 trap exit_handler 1 2 6 15
 
 if [ $REMOTE_EXEC ]; then
+  [ ${CMDB} ] && echo "$(get_cmdb_header)"
   if [ $READ_RHFILE ]; then
     read_remotefile
   else
