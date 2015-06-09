@@ -399,8 +399,9 @@ function check_versions {
           return 1
         fi
       fi
-      typeset jboss_command="sh ${jboss_home}/bin/run.sh -V JBOSS_HOME=${jboss_home} JAVA_HOME=${java_home}"
       if [ -f ${jboss_home}/bin/run.sh ]; then
+        typeset jboss_command="sh ${jboss_home}/bin/run.sh -V JBOSS_HOME=${jboss_home} JAVA_HOME=${java_home}"
+        [ -f ${jboss_home}/bin/standalone.sh ] && jboss_command="sh ${jboss_home}/bin/standalone.sh -V JBOSS_HOME=${jboss_home} JAVA_HOME=${java_home}"
         typeset jb_out=$(exec_with_timeout "${jboss_command}")
         typeset output="$(echo $jb_out | tr ' ' "\n" | $SED -n '/^\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/p'; exit ${PIPESTATUS[2]})"
         typeset ret=$?
