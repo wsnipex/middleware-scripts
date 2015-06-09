@@ -36,6 +36,7 @@ ID=${ID:-"id"}
 function usage {
   echo "usage $(basename $0)
   [-h | --help]               ... this help
+  [-S | --searchprocs]        ... processes to search for         [default all]
   [-p | --procs]              ... show processes in output        [default no]
   [-i | --interfaces]         ... show tcp listen ips of processes[default no]
   [-d | --debug]              ... enable debug output, implies -p [default no]
@@ -775,6 +776,11 @@ while :; do
     -s | --sudo)
       USE_SUDO=true
       shift
+      ;;
+    -S | --searchprocs)
+      searchprocs=$2
+      shift 2
+      REMOTE_OPTS="$REMOTE_OPTS -S "$searchprocs""
       ;;
     -I | --inventory)
       CMDB=true
