@@ -472,12 +472,12 @@ function check_versions {
       typeset mysql_admin="$(dirname $command)/mysqladmin"
       [ $TRACE ] && echoerr "TRACE mysql_admin: ${mysql_admin}"
       if [ ! -x $mysql_admin ]; then
-      [ $TRACE ] && echoerr "TRACE mysql_admin: ${mysql_admin} not executeable or does not exist"
+        [ $TRACE ] && echoerr "TRACE mysql_admin: ${mysql_admin} not executeable or does not exist"
         command_exists mysqladmin >/dev/null 2>&1 && typeset mysql_admin="mysqladmin"
       fi
       [ $TRACE ] && echoerr "TRACE mysql_admin: ${mysql_admin}"
       typeset output="$($mysql_admin -V | $SED -e 's/Distrib//' -e 's/.*\([0-9]\{1,3\}\.[0-9]\{1,3\} .*\), .*/\1/g' -e 's/[ ]\{1,3\}/_/'; exit ${PIPESTATUS[0]})"
-      if ! check_return_code "$command" "$?" "$output"; then set_procfilter "$command"; return 1; fi
+      if ! check_return_code "$command" "$?" "$output"; then output="failed to detect version"; fi
       ;;
     *)
       echo "NA"
