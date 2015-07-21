@@ -400,12 +400,21 @@ function check_versions {
           return 1
         fi
       fi
-      if [ -f ${jboss_home}/bin/run.sh ]; then
+      if [ -f ${jboss_home}/bin/standalone.sh ]; then
+        jboss_command="sh ${jboss_home}/bin/standalone.sh -V JBOSS_HOME=${jboss_home} JAVA_HOME=${java_home} 2>/dev/null"
+        typeset jb6=true
+      elif [ -f ${jboss_home}/bin/run.sh ]; then
         typeset jboss_command="sh ${jboss_home}/bin/run.sh -V JBOSS_HOME=${jboss_home} JAVA_HOME=${java_home}"
-        [ -f ${jboss_home}/bin/standalone.sh ] && jboss_command="sh ${jboss_home}/bin/standalone.sh -V JBOSS_HOME=${jboss_home} JAVA_HOME=${java_home}"
-        typeset jb_out=$(exec_with_timeout "${jboss_command}")
-        typeset output="$(echo $jb_out | tr ' ' "\n" | $SED -n '/^\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/p'; exit ${PIPESTATUS[2]})"
-        typeset ret=$?
+      fi
+      if [ -n "${jboss_command}" ]; then
+        if [ ${jb6} ]; then
+          typeset output="$(exec_with_timeout "${jboss_command}" | $GREP -E "^[jJ][bB]oss" | $SED 's/^[jJ][bB]oss.* \([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}.* \)[(].*$/\1/'; exit ${PIPESTATUS[2]})"
+          typeset ret=$?
+        else
+          typeset jb_out=$(exec_with_timeout "${jboss_command}")
+          typeset output="$(echo $jb_out | tr ' ' "\n" | $SED -n '/^\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/p'; exit ${PIPESTATUS[2]})"
+          typeset ret=$?
+        fi
         if [ -z "${output}" ]; then
           output="$(echo $jb_out | $GREP JBOSS_HOME | $SED 's/.*\([0-9]\{1,2\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/'; exit ${PIPESTATUS[2]})"
           typeset ret=$?
