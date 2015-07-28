@@ -23,6 +23,7 @@ output_valueseparator=' '
 java_tmpfile="/tmp/${$}.java"
 proc_filter_file="/tmp/${$}.filter"
 ssh_opts="-o BatchMode=yes -o ConnectTimeout=5 -o ForwardX11=no -o StrictHostKeyChecking=no -o ServerAliveInterval=10 -o ServerAliveCountMax=3"
+dnsdomains=""
 
 
 PS=${PS:-"ps ax"}
@@ -37,6 +38,7 @@ function usage {
   echo "usage $(basename $0)
   [-h | --help]               ... this help
   [-S | --searchprocs]        ... processes to search for         [default all]
+  [-D | --domains]            ... additional DNS domains to search[default none]
   [-p | --procs]              ... show processes in output        [default no]
   [-i | --interfaces]         ... show tcp listen ips of processes[default no]
   [-d | --debug]              ... enable debug output, implies -p [default no]
@@ -672,11 +674,19 @@ function exec_with_timeout {
 function ssh_exec {
   typeset rhost="$1"
   typeset remoteuser
+  typeset remotehost
   typeset SUDO
 
-  [ $(echo $rhost | $GREP -q "@"; echo $?) -ne 0 ] && remoteuser="root@"
+  if [ $(echo $rhost | $GREP -q "@"; echo $?) -ne 0 ]; then
+    remoteuser="root@"
+  else
+    remoteuser="$(echo ${rhost} | ${AWK} -F"@" '{print $1}')@"
+    rhost=$(echo ${rhost} | ${AWK} -F"@" '{print $2}')
+  fi
+  remotehost=$(get_fqdn $rhost)
+  [ "${remotehost}" != "NOT_FOUND" ] && rhost=$remotehost || echoerr "ERROR: could not resolve ${rhost}"
   [ $DEBUG ] && echoerr "checking remote shell for ${remoteuser}${rhost}"
-  [ $USE_SUDO ] && [ "$(echo "${remoteuser}${rhost}" | awk -F"@" '{print $1}')" != "root" ] && SUDO="sudo"
+  [ $USE_SUDO ] && [ "$(echo "${remoteuser}${rhost}" | ${AWK} -F"@" '{print $1}')" != "root" ] && SUDO="sudo"
   typeset rshell=$(ssh ${ssh_opts} ${remoteuser}${rhost} -C "command -v bash")
   [ -z "$rshell" ] && typeset rshell=$(ssh ${ssh_opts} ${remoteuser}${rhost} -C "command -v ksh")
   if [ -z "$rshell" ]; then
@@ -717,6 +727,19 @@ function read_remotefile {
   done
   wait $waitpids
   exit 0
+}
+
+function get_fqdn {
+  typeset rhost=$1
+  typeset domain
+
+  nslookup ${rhost}  >/dev/null 2>&1 && echo ${rhost} && return 0
+  for domain in $dnsdomains; do
+    [ $TRACE ] && echoerr "TRACE get_fqdn: resolving ${rhost}.${domain}"
+    nslookup ${rhost}.${domain} >/dev/null 2>&1 && echo ${rhost}.${domain} && return 0
+  done
+  echo "NOT_FOUND"
+  return 1
 }
 
 ###
@@ -802,6 +825,10 @@ while :; do
       searchprocs=$2
       shift 2
       REMOTE_OPTS="$REMOTE_OPTS -S "$searchprocs""
+      ;;
+    -D | --domains)
+      dnsdomains=$2
+      shift 2
       ;;
     -I | --inventory)
       CMDB=true
