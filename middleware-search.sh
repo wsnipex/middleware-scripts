@@ -440,7 +440,9 @@ function check_versions {
       [ -f ${ws_home}/versionInfo.sh ] || typeset ws_home="$(get_proc_env "$pid" "was.install.root")/bin"
       [ -f ${ws_home}/versionInfo.sh ] || return 1
       typeset output=$(${ws_home}/versionInfo.sh 2>&1 | $GREP -v Directory | $AWK '/^Version/ { if (length($2)>=4) print $2 }')
-      if ! check_return_code "${ws_home}/versionInfo.sh" "$?" "$output"; then set_procfilter "$command"; return 1; fi
+      ret=$?
+      [ $TRACE ] && echoerr "websphere version: ${output}"
+      if ! check_return_code "${ws_home}/versionInfo.sh" "$ret" "$output"; then set_procfilter "$command"; return 1; fi
       ;;
     C:D)
       if [ $($GREP -q cduser /etc/passwd; echo $?) -eq 0 ]; then
