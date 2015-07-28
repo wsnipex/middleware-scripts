@@ -684,7 +684,7 @@ function ssh_exec {
   else
     remoteuser="$(echo ${rhost} | ${AWK} -F"@" '{print $1}')@"
     rhost=$(echo ${rhost} | ${AWK} -F"@" '{print $2}')
-    [ "$remoteuser" != "@" ] && [ ! $USE_SUDO ] && echoerr "WARN: using a non-root user, but sudo option not given. This can cause incomplete results!"
+    [ "$remoteuser" != "@" ] && [ "$remoteuser" != "root@" ] && [ ! $USE_SUDO ] && echoerr "WARN: using a non-root user, but sudo option not given. This can cause incomplete results!"
   fi
   remotehost=$(get_fqdn $rhost)
   [ "${remotehost}" != "NOT_FOUND" ] && rhost=$remotehost || echoerr "ERROR: could not resolve ${rhost}"
