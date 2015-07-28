@@ -826,10 +826,12 @@ while :; do
     -S | --searchprocs)
       searchprocs=$2
       shift 2
+      [ -z "$searchprocs" ] && echoerr "ERROR: option -S needs an argument" && exit 2
       REMOTE_OPTS="$REMOTE_OPTS -S "$searchprocs""
       ;;
     -D | --domains)
       dnsdomains=$2
+      [ -z "$dnsdomains" ] && echoerr "ERROR: option -D needs an argument" && exit 2
       shift 2
       ;;
     -I | --inventory)
