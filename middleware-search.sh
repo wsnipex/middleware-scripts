@@ -965,7 +965,7 @@ function read_remotefile {
   fi
 
   # traverse our hostname file, ignoring comments and empty lines
-  for remotehost in $(cat $RHFILE | $SED '/^#/d'); do
+  for remotehost in $(cat $RHFILE | $SED '/^#/d' | $AWK -F";" '{print $1}'); do
     [ -z "$remotehost" ] && continue
     [ $DEBUG ] && echoerr "DEBUG read_remotefile: checking host $remotehost"
 
